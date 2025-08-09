@@ -1,1096 +1,417 @@
-/**
- * Amazon Product Importer - Import Interface JavaScript
- *
- * Handles the product search, selection, and import functionality
- *
- * @package Amazon_Product_Importer
- * @since   1.0.0
- */
-
 (function($) {
     'use strict';
 
     /**
-     * Import Interface Controller
+     * Amazon Import Interface
      */
-    var ImportInterface = {
+    var AmazonImportInterface = {
+        
+        currentPage: 1,
+        isSearching: false,
+        isImporting: false,
+        importQueue: [],
 
-        // Configuration
-        config: {
-            ajaxUrl: amazon_importer_data.ajax_url,
-            nonce: amazon_importer_data.nonce,
-            strings: amazon_importer_data.strings,
-            searchDelay: 300,
-            progressUpdateInterval: 2000,
-            maxConcurrentImports: 3,
-            retryDelay: 5000,
-            maxRetries: 3
-        },
-
-        // State management
-        state: {
-            searchTimeout: null,
-            progressTimer: null,
-            currentBatchId: null,
-            selectedProducts: new Set(),
-            searchResults: [],
-            currentPage: 1,
-            totalPages: 1,
-            isSearching: false,
-            isImporting: false,
-            importQueue: [],
-            activeImports: new Map(),
-            retryCount: new Map(),
-            lastSearchParams: null
-        },
-
-        // DOM element cache
-        elements: {
-            $searchForm: null,
-            $searchInput: null,
-            $searchType: null,
-            $resultsContainer: null,
-            $resultsGrid: null,
-            $progressContainer: null,
-            $progressBar: null,
-            $selectionCount: null,
-            $bulkActions: null,
-            $pagination: null,
-            $viewToggles: null,
-            $quickImportForm: null
-        },
-
-        /**
-         * Initialize the import interface
-         */
         init: function() {
-            this.cacheElements();
             this.bindEvents();
-            this.initializeComponents();
-            this.restoreState();
+            this.initSearchForm();
         },
 
-        /**
-         * Cache DOM elements
-         */
-        cacheElements: function() {
-            this.elements.$searchForm = $('#amazon-search-form');
-            this.elements.$searchInput = $('#amazon-search-term');
-            this.elements.$searchType = $('#amazon-search-type');
-            this.elements.$resultsContainer = $('#amazon-search-results-container');
-            this.elements.$resultsGrid = $('#amazon-search-results');
-            this.elements.$progressContainer = $('#amazon-import-progress-container');
-            this.elements.$progressBar = $('.amazon-progress-fill');
-            this.elements.$selectionCount = $('#amazon-selected-count');
-            this.elements.$bulkActions = $('.amazon-import-selected-btn');
-            this.elements.$pagination = $('#amazon-pagination');
-            this.elements.$viewToggles = $('.amazon-view-toggle');
-            this.elements.$quickImportForm = $('#amazon-quick-import-form');
-        },
-
-        /**
-         * Bind event handlers
-         */
         bindEvents: function() {
-            var self = this;
-
-            // Search functionality
-            this.elements.$searchForm.on('submit', function(e) {
-                e.preventDefault();
-                self.performSearch();
-            });
-
-            // Real-time search input handling
-            this.elements.$searchInput.on('input', function() {
-                self.handleSearchInput();
-            });
-
-            // Search type change
-            this.elements.$searchType.on('change', function() {
-                self.updateSearchInputValidation();
-            });
-
-            // Product selection
-            $(document).on('change', '.amazon-product-select', function() {
-                self.handleProductSelection($(this));
-            });
-
-            // Select all/none
-            $('.amazon-select-all-btn').on('click', function() {
-                self.selectAllProducts(true);
-            });
-
-            $('.amazon-select-none-btn').on('click', function() {
-                self.selectAllProducts(false);
-            });
-
-            // View mode toggles
-            this.elements.$viewToggles.on('click', function() {
-                self.toggleViewMode($(this).data('view'));
-            });
-
-            // Individual product actions
-            $(document).on('click', '.amazon-import-product-btn', function() {
-                var asin = $(this).data('asin');
-                self.importSingleProduct(asin);
-            });
-
-            $(document).on('click', '.amazon-update-product-btn', function() {
-                var asin = $(this).data('asin');
-                self.updateSingleProduct(asin);
-            });
-
-            $(document).on('click', '.amazon-preview-product-btn', function() {
-                var asin = $(this).data('asin');
-                self.previewProduct(asin);
-            });
-
-            // Bulk import
-            this.elements.$bulkActions.on('click', function() {
-                self.importSelectedProducts();
-            });
-
-            // Quick import
-            this.elements.$quickImportForm.on('submit', function(e) {
-                e.preventDefault();
-                self.handleQuickImport();
-            });
-
+            // Search form submission
+            $('#amazon-search-form').on('submit', this.handleSearch.bind(this));
+            
+            // Import buttons
+            $(document).on('click', '.import-button', this.handleImport.bind(this));
+            
             // Pagination
-            $(document).on('click', '.amazon-page-btn', function() {
-                var page = $(this).data('page');
-                if (page && page !== self.state.currentPage) {
-                    self.loadPage(page);
-                }
-            });
+            $(document).on('click', '.amazon-pagination a', this.handlePagination.bind(this));
+            
+            // Clear results
+            $('#clear-results').on('click', this.clearResults.bind(this));
+            
+            // Bulk import
+            $('#bulk-import-selected').on('click', this.handleBulkImport.bind(this));
+            
+            // Select all checkbox
+            $('#select-all-products').on('change', this.handleSelectAll.bind(this));
+            
+            // Individual product checkboxes
+            $(document).on('change', '.product-checkbox', this.updateBulkImportButton.bind(this));
+        },
 
-            // Copy ASIN
-            $(document).on('click', '.amazon-copy-asin', function() {
-                self.copyToClipboard($(this).data('asin'));
-            });
-
-            // Progress controls
-            $('#amazon-cancel-import-btn').on('click', function() {
-                self.cancelBatchImport();
-            });
-
-            $('#amazon-pause-import-btn').on('click', function() {
-                self.pauseBatchImport();
-            });
-
-            $('#amazon-resume-import-btn').on('click', function() {
-                self.resumeBatchImport();
-            });
-
-            // Modal events
-            $('.amazon-modal-close, .amazon-modal-cancel').on('click', function() {
-                self.closeModal($(this).closest('.amazon-modal'));
-            });
-
-            // Advanced options toggle
-            $('#amazon-advanced-toggle-btn').on('click', function() {
-                self.toggleAdvancedOptions();
-            });
-
-            // Result filters
-            $('.amazon-tab-btn').on('click', function() {
-                self.filterResults($(this).data('tab'));
-            });
-
-            // Search within results
-            $('#amazon-results-search').on('input', function() {
-                self.searchWithinResults($(this).val());
-            });
-
-            // Keyboard shortcuts
-            $(document).on('keydown', function(e) {
-                self.handleKeyboardShortcuts(e);
-            });
-
-            // Window events
-            $(window).on('beforeunload', function() {
-                if (self.state.isImporting) {
-                    return self.config.strings.import_in_progress;
+        initSearchForm: function() {
+            // Initialize search type toggle
+            $('input[name="search_type"]').on('change', function() {
+                var searchType = $(this).val();
+                if (searchType === 'asin') {
+                    $('#search-keywords').attr('placeholder', 'B08N5WRWNW, B07FZ8S74R, ...');
+                    $('#search-category').closest('tr').hide();
+                } else {
+                    $('#search-keywords').attr('placeholder', 'iPhone, Samsung Galaxy, ...');
+                    $('#search-category').closest('tr').show();
                 }
             });
         },
 
-        /**
-         * Initialize components
-         */
-        initializeComponents: function() {
-            this.initializeTooltips();
-            this.initializeProgressIndicators();
-            this.updateSearchInputValidation();
-        },
-
-        /**
-         * Restore previous state
-         */
-        restoreState: function() {
-            // Restore view mode
-            var viewMode = localStorage.getItem('amazon_import_view_mode') || 'grid';
-            this.setViewMode(viewMode);
-
-            // Check for ongoing imports
-            this.checkOngoingImports();
-        },
-
-        /**
-         * Perform product search
-         */
-        performSearch: function() {
-            if (this.state.isSearching) return;
-
-            var searchParams = this.getSearchParameters();
-            if (!this.validateSearchParameters(searchParams)) {
+        handleSearch: function(e) {
+            e.preventDefault();
+            
+            if (this.isSearching) {
                 return;
             }
-
-            this.state.isSearching = true;
-            this.state.lastSearchParams = searchParams;
-            this.showSearchLoading();
-
-            $.ajax({
-                url: this.config.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'amazon_search_products',
-                    nonce: this.config.nonce,
-                    ...searchParams
-                },
-                success: function(response) {
-                    this.handleSearchSuccess(response);
-                }.bind(this),
-                error: function(xhr, status, error) {
-                    this.handleSearchError(error);
-                }.bind(this),
-                complete: function() {
-                    this.state.isSearching = false;
-                    this.hideSearchLoading();
-                }.bind(this)
-            });
-        },
-
-        /**
-         * Handle search input with debouncing
-         */
-        handleSearchInput: function() {
-            clearTimeout(this.state.searchTimeout);
             
-            var searchTerm = this.elements.$searchInput.val().trim();
+            var $form = $(e.target);
+            var searchType = $form.find('input[name="search_type"]:checked').val();
+            var keywords = $form.find('#search-keywords').val().trim();
+            var category = $form.find('#search-category').val();
             
-            if (searchTerm.length < 2) {
-                this.hideSuggestions();
+            if (!keywords) {
+                this.showMessage(amazon_importer_ajax.strings.enter_keywords, 'error');
                 return;
             }
-
-            this.state.searchTimeout = setTimeout(function() {
-                this.showSearchSuggestions(searchTerm);
-            }.bind(this), this.config.searchDelay);
+            
+            this.currentPage = 1;
+            this.performSearch(searchType, keywords, category);
         },
 
-        /**
-         * Get search parameters from form
-         */
-        getSearchParameters: function() {
-            return {
-                search_term: this.elements.$searchInput.val().trim(),
-                search_type: this.elements.$searchType.val(),
-                search_category: $('#amazon-search-category').val(),
-                min_price: $('#amazon-min-price').val(),
-                max_price: $('#amazon-max-price').val(),
-                min_reviews: $('#amazon-min-reviews').val(),
-                sort_by: $('#amazon-sort-by').val(),
-                results_per_page: $('#amazon-results-per-page').val() || 20,
-                page: this.state.currentPage
+        performSearch: function(searchType, keywords, category, page) {
+            page = page || 1;
+            
+            this.isSearching = true;
+            this.showLoading(true);
+            this.clearResults();
+            
+            var data = {
+                action: 'api_search_products',
+                nonce: amazon_importer_ajax.nonce,
+                search_type: searchType,
+                keywords: keywords,
+                category: category,
+                page: page,
+                items_per_page: 20
             };
+
+            $.post(amazon_importer_ajax.ajax_url, data)
+                .done(this.handleSearchResponse.bind(this))
+                .fail(this.handleSearchError.bind(this))
+                .always(function() {
+                    this.isSearching = false;
+                    this.showLoading(false);
+                }.bind(this));
         },
 
-        /**
-         * Validate search parameters
-         */
-        validateSearchParameters: function(params) {
-            if (!params.search_term) {
-                this.showNotification('error', 'Please enter a search term');
-                this.elements.$searchInput.focus();
-                return false;
-            }
-
-            if (params.search_type === 'asin') {
-                if (!/^[A-Z0-9]{10}$/.test(params.search_term.toUpperCase())) {
-                    this.showNotification('error', 'Invalid ASIN format. Must be 10 characters.');
-                    this.elements.$searchInput.focus();
-                    return false;
-                }
-            }
-
-            return true;
-        },
-
-        /**
-         * Handle successful search response
-         */
-        handleSearchSuccess: function(response) {
-            if (response.success) {
-                this.state.searchResults = response.data.products || [];
-                this.state.currentPage = response.data.current_page || 1;
-                this.state.totalPages = response.data.total_pages || 1;
-                
-                this.renderSearchResults(response.data);
-                this.showResultsContainer();
-                this.updatePagination();
-                this.clearSelection();
-                
-                // Save search state
-                this.saveSearchState();
+        handleSearchResponse: function(response) {
+            if (response.success && response.data.items && response.data.items.length > 0) {
+                this.displayResults(response.data);
+                this.updateSearchStats(response.data);
             } else {
-                this.showNotification('error', response.data.message || 'Search failed');
+                var message = response.data && response.data.error ? 
+                    response.data.error : 
+                    amazon_importer_ajax.strings.no_results;
+                this.showMessage(message, 'info');
             }
         },
 
-        /**
-         * Handle search error
-         */
-        handleSearchError: function(error) {
-            console.error('Search error:', error);
-            this.showNotification('error', 'Search failed. Please try again.');
+        handleSearchError: function() {
+            this.showMessage('Erreur lors de la recherche. Veuillez réessayer.', 'error');
         },
 
-        /**
-         * Render search results
-         */
-        renderSearchResults: function(data) {
-            if (!data.products || data.products.length === 0) {
-                this.renderNoResults();
-                return;
-            }
-
-            var html = '';
-            data.products.forEach(function(product, index) {
-                html += this.generateProductHTML(product, index);
-            }.bind(this));
-
-            this.elements.$resultsGrid.html(html);
-            this.initializeProductElements();
+        displayResults: function(data) {
+            var $resultsContainer = $('#amazon-results');
+            var $grid = $('#amazon-products-grid');
             
-            // Update results info
-            this.updateResultsInfo(data);
+            $grid.empty();
+            
+            if (data.items && data.items.length > 0) {
+                data.items.forEach(function(item) {
+                    var productCard = this.createProductCard(item);
+                    $grid.append(productCard);
+                }.bind(this));
+                
+                this.createPagination(data);
+                $resultsContainer.show();
+            }
         },
 
-        /**
-         * Generate HTML for a single product
-         */
-        generateProductHTML: function(product, index) {
-            var existsLocally = product.exists_locally;
-            var buttonClass = existsLocally ? 'amazon-update-product-btn' : 'amazon-import-product-btn';
-            var buttonText = existsLocally ? 'Update' : 'Import';
-            var buttonIcon = existsLocally ? 'dashicons-update' : 'dashicons-download';
-
-            return `
-                <div class="amazon-product-item" data-asin="${product.asin}" data-index="${index}">
-                    <div class="amazon-product-checkbox">
-                        <input type="checkbox" class="amazon-product-select" 
-                               name="selected_products[]" value="${product.asin}" 
-                               id="product_${product.asin}">
-                        <label for="product_${product.asin}" class="screen-reader-text">Select this product</label>
+        createProductCard: function(item) {
+            var imageUrl = item.image || amazon_importer_ajax.default_image;
+            var price = item.price ? item.price : 'Prix non disponible';
+            var isImported = item.is_imported || false;
+            
+            var cardHtml = `
+                <div class="amazon-product-card" data-asin="${item.asin}">
+                    <div class="product-checkbox-wrapper">
+                        <input type="checkbox" class="product-checkbox" value="${item.asin}" ${isImported ? 'disabled' : ''}>
                     </div>
-
                     <div class="amazon-product-image">
-                        ${product.image ? `<img src="${product.image}" alt="${product.title}" loading="lazy">` : ''}
-                        <div class="amazon-image-placeholder" ${product.image ? 'style="display:none;"' : ''}>
-                            <span class="dashicons dashicons-format-image"></span>
-                            <span>No Image</span>
-                        </div>
-                        
-                        <div class="amazon-product-indicators">
-                            ${existsLocally ? '<span class="amazon-indicator amazon-exists-indicator"><span class="dashicons dashicons-yes-alt"></span>Exists</span>' : ''}
-                            ${product.prime ? '<span class="amazon-indicator amazon-prime-indicator"><span class="dashicons dashicons-star-filled"></span>Prime</span>' : ''}
-                        </div>
+                        <img src="${imageUrl}" alt="${item.title}" loading="lazy">
                     </div>
-
-                    <div class="amazon-product-details">
-                        <h3 class="amazon-product-title">
-                            <a href="${product.url}" target="_blank" rel="noopener">
-                                ${product.title}
-                                <span class="dashicons dashicons-external"></span>
-                            </a>
-                        </h3>
-
-                        <div class="amazon-product-asin">
-                            <span class="amazon-label">ASIN:</span>
-                            <span class="amazon-value">${product.asin}</span>
-                            <button type="button" class="amazon-copy-asin" data-asin="${product.asin}" title="Copy ASIN">
-                                <span class="dashicons dashicons-admin-page"></span>
-                            </button>
-                        </div>
-
-                        ${product.brand ? `<div class="amazon-product-brand"><span class="amazon-label">Brand:</span> <span class="amazon-value">${product.brand}</span></div>` : ''}
-                        
-                        ${product.price ? `<div class="amazon-product-price"><span class="amazon-price-current">${product.price}</span></div>` : ''}
-                        
-                        ${product.rating ? this.generateRatingHTML(product.rating, product.review_count) : ''}
-                    </div>
-
+                    <div class="amazon-product-title">${item.title}</div>
+                    <div class="amazon-product-asin">ASIN: ${item.asin}</div>
+                    <div class="amazon-product-price">${price}</div>
                     <div class="amazon-product-actions">
-                        <div class="amazon-primary-actions">
-                            <button type="button" class="button button-primary ${buttonClass}" data-asin="${product.asin}">
-                                <span class="dashicons ${buttonIcon}"></span>
-                                ${buttonText}
-                            </button>
-                            
-                            <button type="button" class="button button-secondary amazon-preview-product-btn" data-asin="${product.asin}">
-                                <span class="dashicons dashicons-visibility"></span>
-                                Preview
-                            </button>
-                        </div>
+                        ${this.createImportButton(item.asin, isImported)}
                     </div>
-
-                    <div class="amazon-import-status" style="display: none;">
-                        <div class="amazon-import-progress">
-                            <div class="amazon-import-spinner"><span class="spinner is-active"></span></div>
-                            <div class="amazon-import-message">Importing...</div>
-                        </div>
-                    </div>
+                    ${isImported ? '<div class="import-status">✓ Déjà importé</div>' : ''}
                 </div>
             `;
-        },
-
-        /**
-         * Generate rating HTML
-         */
-        generateRatingHTML: function(rating, reviewCount) {
-            var ratingValue = parseFloat(rating);
-            var fullStars = Math.floor(ratingValue);
-            var hasHalfStar = (ratingValue - fullStars) >= 0.5;
-            var emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
-
-            var stars = '';
-            for (var i = 0; i < fullStars; i++) {
-                stars += '<span class="dashicons dashicons-star-filled"></span>';
-            }
-            if (hasHalfStar) {
-                stars += '<span class="dashicons dashicons-star-half"></span>';
-            }
-            for (var i = 0; i < emptyStars; i++) {
-                stars += '<span class="dashicons dashicons-star-empty"></span>';
-            }
-
-            return `
-                <div class="amazon-product-rating">
-                    <div class="amazon-rating-stars">${stars}</div>
-                    <span class="amazon-rating-value">${rating}</span>
-                    ${reviewCount ? `<span class="amazon-review-count">(${reviewCount})</span>` : ''}
-                </div>
-            `;
-        },
-
-        /**
-         * Handle product selection
-         */
-        handleProductSelection: function($checkbox) {
-            var asin = $checkbox.val();
-            var isSelected = $checkbox.is(':checked');
-
-            if (isSelected) {
-                this.state.selectedProducts.add(asin);
-            } else {
-                this.state.selectedProducts.delete(asin);
-            }
-
-            this.updateSelectionUI();
-        },
-
-        /**
-         * Select all products
-         */
-        selectAllProducts: function(select) {
-            $('.amazon-product-select').prop('checked', select);
             
-            if (select) {
-                $('.amazon-product-select').each(function() {
-                    this.state.selectedProducts.add($(this).val());
-                }.bind(this));
-            } else {
-                this.state.selectedProducts.clear();
-            }
-
-            this.updateSelectionUI();
+            return $(cardHtml);
         },
 
-        /**
-         * Update selection UI
-         */
-        updateSelectionUI: function() {
-            var count = this.state.selectedProducts.size;
+        createImportButton: function(asin, isImported) {
+            if (isImported) {
+                return '<button class="import-button imported" disabled>Déjà importé</button>';
+            }
             
-            this.elements.$selectionCount.text(count);
-            $('.amazon-selected-count').text('(' + count + ')');
+            return `<button class="import-button" data-asin="${asin}">Importer</button>`;
+        },
+
+        createPagination: function(data) {
+            if (!data.pagination) return;
             
-            // Enable/disable bulk actions
-            this.elements.$bulkActions.prop('disabled', count === 0);
-            $('#amazon-bulk-preview-btn, #amazon-bulk-compare-btn').prop('disabled', count === 0);
+            var pagination = data.pagination;
+            var paginationHtml = '<div class="amazon-pagination">';
             
-            // Update select all button state
-            var totalProducts = $('.amazon-product-select').length;
-            var allSelected = count === totalProducts && totalProducts > 0;
-            $('.amazon-select-all-btn').toggleClass('amazon-all-selected', allSelected);
-        },
-
-        /**
-         * Import single product
-         */
-        importSingleProduct: function(asin) {
-            if (!asin || this.state.activeImports.has(asin)) return;
-
-            var $productItem = $(`.amazon-product-item[data-asin="${asin}"]`);
-            this.showProductProgress($productItem, 'Importing...');
-
-            this.state.activeImports.set(asin, {
-                startTime: Date.now(),
-                productItem: $productItem
-            });
-
-            $.ajax({
-                url: this.config.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'amazon_import_product',
-                    nonce: this.config.nonce,
-                    asin: asin,
-                    force_update: false
-                },
-                success: function(response) {
-                    this.handleImportSuccess(asin, response);
-                }.bind(this),
-                error: function(xhr, status, error) {
-                    this.handleImportError(asin, error);
-                }.bind(this),
-                complete: function() {
-                    this.state.activeImports.delete(asin);
-                    this.hideProductProgress($productItem);
-                }.bind(this)
-            });
-        },
-
-        /**
-         * Update single product
-         */
-        updateSingleProduct: function(asin) {
-            if (!confirm('Are you sure you want to update this product? This will overwrite local changes.')) {
-                return;
+            if (pagination.has_previous) {
+                paginationHtml += `<a href="#" data-page="${pagination.current_page - 1}">« Précédent</a>`;
             }
-
-            var $productItem = $(`.amazon-product-item[data-asin="${asin}"]`);
-            this.showProductProgress($productItem, 'Updating...');
-
-            $.ajax({
-                url: this.config.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'amazon_import_product',
-                    nonce: this.config.nonce,
-                    asin: asin,
-                    force_update: true
-                },
-                success: function(response) {
-                    this.handleImportSuccess(asin, response);
-                }.bind(this),
-                error: function(xhr, status, error) {
-                    this.handleImportError(asin, error);
-                }.bind(this),
-                complete: function() {
-                    this.hideProductProgress($productItem);
-                }.bind(this)
-            });
+            
+            for (var i = Math.max(1, pagination.current_page - 2); 
+                 i <= Math.min(pagination.total_pages, pagination.current_page + 2); 
+                 i++) {
+                var activeClass = i === pagination.current_page ? ' current' : '';
+                paginationHtml += `<a href="#" data-page="${i}" class="page-number${activeClass}">${i}</a>`;
+            }
+            
+            if (pagination.has_next) {
+                paginationHtml += `<a href="#" data-page="${pagination.current_page + 1}">Suivant »</a>`;
+            }
+            
+            paginationHtml += '</div>';
+            
+            $('#amazon-results').append(paginationHtml);
         },
 
-        /**
-         * Import selected products
-         */
-        importSelectedProducts: function() {
-            if (this.state.selectedProducts.size === 0) {
-                this.showNotification('warning', 'Please select at least one product to import.');
-                return;
-            }
-
-            var message = `Import ${this.state.selectedProducts.size} selected products?`;
-            if (!confirm(message)) {
-                return;
-            }
-
-            this.startBatchImport(Array.from(this.state.selectedProducts));
+        handlePagination: function(e) {
+            e.preventDefault();
+            
+            if (this.isSearching) return;
+            
+            var page = parseInt($(e.target).data('page'));
+            var $form = $('#amazon-search-form');
+            var searchType = $form.find('input[name="search_type"]:checked').val();
+            var keywords = $form.find('#search-keywords').val().trim();
+            var category = $form.find('#search-category').val();
+            
+            this.currentPage = page;
+            this.performSearch(searchType, keywords, category, page);
         },
 
-        /**
-         * Start batch import
-         */
-        startBatchImport: function(asins) {
-            this.state.currentBatchId = this.generateBatchId();
-            this.state.isImporting = true;
-            this.state.importQueue = [...asins];
+        handleImport: function(e) {
+            e.preventDefault();
+            
+            if (this.isImporting) return;
+            
+            var $button = $(e.target);
+            var asin = $button.data('asin');
+            
+            this.importProduct(asin, $button);
+        },
 
-            $.ajax({
-                url: this.config.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'amazon_import_batch',
-                    nonce: this.config.nonce,
-                    asins: asins,
-                    batch_id: this.state.currentBatchId
-                },
-                success: function(response) {
+        importProduct: function(asin, $button) {
+            $button.prop('disabled', true)
+                   .addClass('importing')
+                   .text('Importation...');
+            
+            var data = {
+                action: 'api_import_product',
+                nonce: amazon_importer_ajax.nonce,
+                asin: asin
+            };
+
+            $.post(amazon_importer_ajax.ajax_url, data)
+                .done(function(response) {
                     if (response.success) {
-                        this.showProgressContainer();
-                        this.startProgressMonitoring();
-                        this.showNotification('info', response.data.message);
-                    } else {
-                        this.showNotification('error', response.data.message);
-                        this.state.isImporting = false;
-                    }
-                }.bind(this),
-                error: function() {
-                    this.showNotification('error', 'Failed to start batch import.');
-                    this.state.isImporting = false;
-                }.bind(this)
-            });
-        },
-
-        /**
-         * Start progress monitoring
-         */
-        startProgressMonitoring: function() {
-            this.updateBatchProgress();
-            this.state.progressTimer = setInterval(function() {
-                this.updateBatchProgress();
-            }.bind(this), this.config.progressUpdateInterval);
-        },
-
-        /**
-         * Update batch progress
-         */
-        updateBatchProgress: function() {
-            if (!this.state.currentBatchId) return;
-
-            $.ajax({
-                url: this.config.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'amazon_get_import_status',
-                    nonce: this.config.nonce,
-                    batch_id: this.state.currentBatchId
-                },
-                success: function(response) {
-                    if (response.success) {
-                        this.updateProgressUI(response.data);
+                        $button.removeClass('importing')
+                               .addClass('imported')
+                               .text('Importé');
                         
-                        if (['completed', 'cancelled', 'failed'].includes(response.data.status)) {
-                            this.stopProgressMonitoring();
-                            this.state.isImporting = false;
-                            this.handleBatchComplete(response.data);
-                        }
-                    }
-                }.bind(this)
-            });
-        },
-
-        /**
-         * Update progress UI
-         */
-        updateProgressUI: function(data) {
-            var percentage = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
-            
-            // Update progress bar
-            this.elements.$progressBar.css('width', percentage + '%');
-            $('.amazon-progress-percentage').text(percentage + '%');
-            
-            // Update counters
-            $('.amazon-progress-current').text(data.processed);
-            $('.amazon-progress-total').text(data.total);
-            $('.amazon-progress-success-count').text(data.success);
-            $('.amazon-progress-failed-count').text(data.failed);
-            
-            // Update timing
-            if (data.start_time) {
-                var elapsed = Math.floor((Date.now() - new Date(data.start_time).getTime()) / 1000);
-                $('.amazon-progress-elapsed').text(this.formatDuration(elapsed));
-                
-                if (data.processed > 0 && data.status === 'running') {
-                    var rate = data.processed / elapsed;
-                    var remainingTime = (data.total - data.processed) / rate;
-                    $('.amazon-progress-eta').text(this.formatDuration(remainingTime));
-                }
-            }
-            
-            // Update current product
-            if (data.current_asin) {
-                $('.amazon-current-asin .amazon-current-value').text(data.current_asin);
-            }
-            if (data.current_product) {
-                $('.amazon-current-title .amazon-current-value').text(data.current_product);
-            }
-        },
-
-        /**
-         * Handle import success
-         */
-        handleImportSuccess: function(asin, response) {
-            if (response.success) {
-                var $productItem = $(`.amazon-product-item[data-asin="${asin}"]`);
-                this.markProductAsImported($productItem, response.data);
-                this.showNotification('success', response.data.message);
-            } else {
-                this.handleImportError(asin, response.data.message);
-            }
-        },
-
-        /**
-         * Handle import error
-         */
-        handleImportError: function(asin, error) {
-            var $productItem = $(`.amazon-product-item[data-asin="${asin}"]`);
-            this.markProductAsError($productItem, error);
-            
-            // Implement retry logic
-            var retryCount = this.state.retryCount.get(asin) || 0;
-            if (retryCount < this.config.maxRetries) {
-                this.state.retryCount.set(asin, retryCount + 1);
-                setTimeout(function() {
-                    this.importSingleProduct(asin);
-                }.bind(this), this.config.retryDelay);
-            } else {
-                this.showNotification('error', `Failed to import ${asin}: ${error}`);
-            }
-        },
-
-        /**
-         * Preview product
-         */
-        previewProduct: function(asin) {
-            this.showModal('product');
-            this.loadProductPreview(asin);
-        },
-
-        /**
-         * Load product preview
-         */
-        loadProductPreview: function(asin) {
-            var $modal = $('#amazon-product-modal');
-            var $body = $modal.find('.amazon-modal-body');
-            
-            $body.html('<div class="amazon-loading"><span class="spinner is-active"></span><p>Loading product details...</p></div>');
-
-            $.ajax({
-                url: this.config.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'amazon_get_product_details',
-                    nonce: this.config.nonce,
-                    asin: asin
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $body.html(this.generateProductPreviewHTML(response.data));
+                        // Disable checkbox
+                        $button.closest('.amazon-product-card')
+                               .find('.product-checkbox')
+                               .prop('disabled', true);
+                        
+                        this.showMessage(
+                            `Produit ${asin} importé avec succès!`, 
+                            'success'
+                        );
+                        
+                        // Update import statistics
+                        this.updateImportStats();
+                        
                     } else {
-                        $body.html('<p class="amazon-error">Failed to load product details.</p>');
+                        $button.removeClass('importing')
+                               .prop('disabled', false)
+                               .text('Importer');
+                        
+                        var message = response.data && response.data.error ? 
+                            response.data.error : 
+                            'Erreur lors de l\'importation';
+                        this.showMessage(message, 'error');
                     }
-                }.bind(this),
-                error: function() {
-                    $body.html('<p class="amazon-error">Failed to load product details.</p>');
-                }
-            });
+                }.bind(this))
+                .fail(function() {
+                    $button.removeClass('importing')
+                           .prop('disabled', false)
+                           .text('Importer');
+                    
+                    this.showMessage('Erreur lors de l\'importation', 'error');
+                }.bind(this));
         },
 
-        /**
-         * Quick import handler
-         */
-        handleQuickImport: function() {
-            var asin = $('#amazon-quick-asin').val().trim().toUpperCase();
-            var forceUpdate = $('#amazon-quick-force-update').is(':checked');
+        handleBulkImport: function(e) {
+            e.preventDefault();
             
-            if (!this.validateAsin(asin)) {
-                this.showNotification('error', 'Invalid ASIN format');
+            var selectedAsins = this.getSelectedAsins();
+            
+            if (selectedAsins.length === 0) {
+                this.showMessage('Veuillez sélectionner au moins un produit', 'error');
                 return;
             }
-
-            var $button = this.elements.$quickImportForm.find('button[type="submit"]');
-            this.setButtonLoading($button, true);
-
-            $.ajax({
-                url: this.config.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'amazon_import_product',
-                    nonce: this.config.nonce,
-                    asin: asin,
-                    force_update: forceUpdate
-                },
-                success: function(response) {
-                    if (response.success) {
-                        this.showNotification('success', response.data.message);
-                        this.elements.$quickImportForm[0].reset();
-                    } else {
-                        this.showNotification('error', response.data.message);
-                    }
-                }.bind(this),
-                error: function() {
-                    this.showNotification('error', 'Import failed. Please try again.');
-                }.bind(this),
-                complete: function() {
-                    this.setButtonLoading($button, false);
-                }.bind(this)
-            });
+            
+            if (!confirm(`Importer ${selectedAsins.length} produit(s) sélectionné(s)?`)) {
+                return;
+            }
+            
+            this.startBulkImport(selectedAsins);
         },
 
-        /**
-         * Copy to clipboard
-         */
-        copyToClipboard: function(text) {
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(text).then(function() {
-                    this.showNotification('success', 'Copied to clipboard');
-                }.bind(this));
-            } else {
-                // Fallback
-                var textArea = document.createElement('textarea');
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    this.showNotification('success', 'Copied to clipboard');
-                } catch (err) {
-                    this.showNotification('error', 'Failed to copy');
-                }
-                document.body.removeChild(textArea);
+        startBulkImport: function(asins) {
+            this.importQueue = asins.slice(); // Copy array
+            this.updateBulkProgress(0, this.importQueue.length);
+            this.processBulkImportQueue();
+        },
+
+        processBulkImportQueue: function() {
+            if (this.importQueue.length === 0) {
+                this.completeBulkImport();
+                return;
+            }
+            
+            var asin = this.importQueue.shift();
+            var $button = $(`.import-button[data-asin="${asin}"]`);
+            
+            // Update progress
+            var completed = this.importQueue.length;
+            var total = completed + this.importQueue.length;
+            this.updateBulkProgress(total - completed, total);
+            
+            // Import single product
+            this.importProduct(asin, $button);
+            
+            // Continue with next item after delay
+            setTimeout(this.processBulkImportQueue.bind(this), 1000);
+        },
+
+        updateBulkProgress: function(completed, total) {
+            var percentage = Math.round((completed / total) * 100);
+            
+            $('#bulk-progress-bar .amazon-progress-fill').css('width', percentage + '%');
+            $('#bulk-progress-text').text(`${completed}/${total} produits importés`);
+            
+            if (completed === 0) {
+                $('#bulk-progress-wrap').show();
             }
         },
 
-        // UI Helper Methods
-        showSearchLoading: function() {
-            $('#amazon-search-loading').show();
-            this.elements.$resultsContainer.hide();
+        completeBulkImport: function() {
+            setTimeout(function() {
+                $('#bulk-progress-wrap').hide();
+                this.showMessage('Importation en lot terminée!', 'success');
+                this.updateBulkImportButton();
+            }.bind(this), 1000);
         },
 
-        hideSearchLoading: function() {
-            $('#amazon-search-loading').hide();
+        getSelectedAsins: function() {
+            var asins = [];
+            $('.product-checkbox:checked:not(:disabled)').each(function() {
+                asins.push($(this).val());
+            });
+            return asins;
         },
 
-        showResultsContainer: function() {
-            this.elements.$resultsContainer.show();
+        handleSelectAll: function(e) {
+            var isChecked = $(e.target).is(':checked');
+            $('.product-checkbox:not(:disabled)').prop('checked', isChecked);
+            this.updateBulkImportButton();
         },
 
-        showProgressContainer: function() {
-            this.elements.$progressContainer.show();
-            $('html, body').animate({
-                scrollTop: this.elements.$progressContainer.offset().top - 50
-            }, 500);
+        updateBulkImportButton: function() {
+            var selectedCount = this.getSelectedAsins().length;
+            var $button = $('#bulk-import-selected');
+            
+            if (selectedCount > 0) {
+                $button.prop('disabled', false)
+                       .text(`Importer ${selectedCount} produit(s)`);
+            } else {
+                $button.prop('disabled', true)
+                       .text('Importer la sélection');
+            }
         },
 
-        showProductProgress: function($item, message) {
-            $item.find('.amazon-import-message').text(message);
-            $item.find('.amazon-import-status').show();
-            $item.find('.amazon-product-actions').hide();
+        updateSearchStats: function(data) {
+            if (data.pagination) {
+                var stats = `${data.pagination.total_items} résultat(s) trouvé(s)`;
+                $('#search-stats').text(stats).show();
+            }
         },
 
-        hideProductProgress: function($item) {
-            $item.find('.amazon-import-status').hide();
-            $item.find('.amazon-product-actions').show();
+        updateImportStats: function() {
+            // This could fetch and display import statistics
+            // For now, just increment a counter if it exists
+            var $counter = $('#import-counter');
+            if ($counter.length) {
+                var current = parseInt($counter.text()) || 0;
+                $counter.text(current + 1);
+            }
         },
 
-        markProductAsImported: function($item, data) {
-            $item.addClass('amazon-imported');
-            $item.find('.amazon-import-product-btn')
-                 .removeClass('amazon-import-product-btn')
-                 .addClass('amazon-update-product-btn')
-                 .html('<span class="dashicons dashicons-update"></span>Update');
+        clearResults: function() {
+            $('#amazon-results').hide();
+            $('#amazon-products-grid').empty();
+            $('#search-stats').hide();
+            this.updateBulkImportButton();
         },
 
-        markProductAsError: function($item, error) {
-            $item.addClass('amazon-import-error');
-            this.showNotification('error', error);
+        showLoading: function(show) {
+            if (show) {
+                $('#amazon-loading').show();
+                $('#search-button').prop('disabled', true);
+            } else {
+                $('#amazon-loading').hide();
+                $('#search-button').prop('disabled', false);
+            }
         },
 
-        showNotification: function(type, message) {
-            var $notification = $(`<div class="notice notice-${type} is-dismissible"><p>${message}</p></div>`);
-            $('.amazon-notifications, .wrap').first().prepend($notification);
+        showMessage: function(message, type) {
+            type = type || 'info';
+            
+            var $message = $(`<div class="amazon-message ${type}">${message}</div>`);
+            
+            $('#amazon-messages').append($message);
             
             setTimeout(function() {
-                $notification.fadeOut(function() {
+                $message.fadeOut(function() {
                     $(this).remove();
                 });
             }, 5000);
-        },
-
-        // Utility Methods
-        validateAsin: function(asin) {
-            return /^[A-Z0-9]{10}$/.test(asin);
-        },
-
-        generateBatchId: function() {
-            return 'batch_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        },
-
-        formatDuration: function(seconds) {
-            var hours = Math.floor(seconds / 3600);
-            var minutes = Math.floor((seconds % 3600) / 60);
-            var secs = Math.floor(seconds % 60);
-            
-            if (hours > 0) {
-                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-            }
-            return `${minutes}:${secs.toString().padStart(2, '0')}`;
-        },
-
-        setButtonLoading: function($button, loading) {
-            if (loading) {
-                $button.prop('disabled', true).addClass('amazon-loading');
-                $button.find('.amazon-quick-import-text').hide();
-                $button.find('.amazon-quick-import-loading').show();
-            } else {
-                $button.prop('disabled', false).removeClass('amazon-loading');
-                $button.find('.amazon-quick-import-text').show();
-                $button.find('.amazon-quick-import-loading').hide();
-            }
-        },
-
-        // State Management
-        saveSearchState: function() {
-            if (this.state.lastSearchParams) {
-                localStorage.setItem('amazon_last_search', JSON.stringify(this.state.lastSearchParams));
-            }
-        },
-
-        clearSelection: function() {
-            this.state.selectedProducts.clear();
-            $('.amazon-product-select').prop('checked', false);
-            this.updateSelectionUI();
-        },
-
-        // Placeholder methods for features to be implemented
-        loadPage: function(page) {
-            this.state.currentPage = page;
-            this.performSearch();
-        },
-
-        toggleViewMode: function(mode) {
-            this.setViewMode(mode);
-            localStorage.setItem('amazon_import_view_mode', mode);
-        },
-
-        setViewMode: function(mode) {
-            this.elements.$viewToggles.removeClass('active');
-            this.elements.$viewToggles.filter(`[data-view="${mode}"]`).addClass('active');
-            this.elements.$resultsGrid.removeClass('amazon-view-grid amazon-view-list').addClass(`amazon-view-${mode}`);
-        },
-
-        toggleAdvancedOptions: function() {
-            $('#amazon-advanced-options').slideToggle();
-        },
-
-        showModal: function(type) {
-            $(`#amazon-${type}-modal`).show();
-            $('body').addClass('amazon-modal-open');
-        },
-
-        closeModal: function($modal) {
-            $modal.hide();
-            $('body').removeClass('amazon-modal-open');
-        },
-
-        handleKeyboardShortcuts: function(e) {
-            // Implement keyboard shortcuts
-        },
-
-        initializeTooltips: function() {
-            $('[title]').tooltip();
-        },
-
-        initializeProgressIndicators: function() {
-            // Initialize progress indicators
-        },
-
-        initializeProductElements: function() {
-            // Initialize any product-specific elements after rendering
-        },
-
-        checkOngoingImports: function() {
-            // Check for any ongoing imports on page load
-        },
-
-        updateSearchInputValidation: function() {
-            // Update input validation based on search type
-        },
-
-        renderNoResults: function() {
-            this.elements.$resultsGrid.html('<div class="amazon-no-results"><p>No products found.</p></div>');
-        },
-
-        updateResultsInfo: function(data) {
-            // Update results information display
-        },
-
-        updatePagination: function() {
-            // Update pagination controls
-        },
-
-        stopProgressMonitoring: function() {
-            if (this.state.progressTimer) {
-                clearInterval(this.state.progressTimer);
-                this.state.progressTimer = null;
-            }
-        },
-
-        handleBatchComplete: function(data) {
-            this.showNotification('info', `Batch import completed. ${data.success} successful, ${data.failed} failed.`);
-        },
-
-        cancelBatchImport: function() {
-            if (confirm('Cancel the current import batch?')) {
-                // Implement batch cancellation
-            }
-        },
-
-        pauseBatchImport: function() {
-            // Implement batch pause
-        },
-
-        resumeBatchImport: function() {
-            // Implement batch resume
-        },
-
-        showSearchSuggestions: function(term) {
-            // Implement search suggestions
-        },
-
-        hideSuggestions: function() {
-            $('#amazon-search-suggestions').hide();
-        },
-
-        filterResults: function(filter) {
-            // Implement result filtering
-        },
-
-        searchWithinResults: function(term) {
-            // Implement search within results
-        },
-
-        generateProductPreviewHTML: function(data) {
-            // Generate product preview HTML
-            return '<div class="amazon-product-preview">Product preview content</div>';
         }
     };
 
-    /**
-     * Initialize when document is ready
-     */
+    // Initialize when document is ready
     $(document).ready(function() {
-        if (typeof amazon_importer_data !== 'undefined') {
-            ImportInterface.init();
-        }
+        AmazonImportInterface.init();
     });
-
-    // Expose to global scope for debugging
-    window.AmazonImportInterface = ImportInterface;
 
 })(jQuery);
