@@ -1,0 +1,127 @@
+amazon-product-importer/
+│
+├── amazon-product-importer.php              # Fichier principal du plugin
+├── uninstall.php                            # Script de désinstallation
+├── README.md                                # Documentation du plugin
+├── CHANGELOG.md                             # Historique des versions
+├── LICENSE                                  # Licence du plugin
+│
+├── admin/                                   # Interface d'administration
+│   ├── class-admin.php                      # Classe principale admin
+│   ├── class-admin-settings.php             # Page des réglages
+│   ├── class-admin-import.php               # Interface d'importation
+│   ├── partials/                            # Templates admin
+│   │   ├── admin-display.php                # Page principale admin
+│   │   ├── admin-settings-display.php       # Page des réglages
+│   │   ├── admin-import-display.php         # Page d'importation
+│   │   ├── product-search-results.php       # Résultats de recherche
+│   │   └── import-progress.php              # Barre de progression
+│   ├── css/                                 # Styles admin
+│   │   ├── admin.css                        # Styles principaux
+│   │   └── import-interface.css             # Styles interface d'import
+│   └── js/                                  # Scripts admin
+│       ├── admin.js                         # Scripts principaux
+│       ├── import-interface.js              # Interface d'importation
+│       └── settings.js                      # Gestion des réglages
+│
+├── public/                                  # Partie publique (si nécessaire)
+│   ├── class-public.php                     # Classe publique
+│   ├── css/                                 # Styles publics
+│   │   └── public.css                       # Styles front-end
+│   └── js/                                  # Scripts publics
+│       └── public.js                        # Scripts front-end
+│
+├── includes/                                # Classes et fonctions principales
+│   ├── class-activator.php                  # Activation du plugin
+│   ├── class-deactivator.php               # Désactivation du plugin
+│   ├── class-loader.php                     # Chargeur des hooks
+│   ├── class-i18n.php                       # Internationalisation
+│   ├── class-amazon-product-importer.php    # Classe principale
+│   │
+│   ├── api/                                 # Gestion API Amazon
+│   │   ├── class-amazon-api.php             # Interface API Amazon
+│   │   ├── class-amazon-auth.php            # Authentification Amazon
+│   │   ├── class-api-request.php            # Requêtes API
+│   │   └── class-api-response-parser.php    # Parseur de réponses
+│   │
+│   ├── import/                              # Logique d'importation
+│   │   ├── class-product-importer.php       # Importateur principal
+│   │   ├── class-product-mapper.php         # Mapping des données
+│   │   ├── class-image-handler.php          # Gestion des images
+│   │   ├── class-category-handler.php       # Gestion des catégories
+│   │   ├── class-variation-handler.php      # Gestion des variations
+│   │   └── class-price-updater.php          # Mise à jour des prix
+│   │
+│   ├── cron/                                # Tâches automatiques
+│   │   ├── class-cron-manager.php           # Gestionnaire cron
+│   │   ├── class-price-sync.php             # Synchronisation prix
+│   │   └── class-product-updater.php        # Mise à jour produits
+│   │
+│   ├── database/                            # Gestion base de données
+│   │   ├── class-database.php               # Interface DB
+│   │   ├── class-product-meta.php           # Méta-données produits
+│   │   └── migrations/                      # Scripts de migration
+│   │       └── create-tables.php            # Création des tables
+│   │
+│   └── utilities/                           # Utilitaires
+│       ├── class-logger.php                 # Système de logs
+│       ├── class-validator.php              # Validation des données
+│       ├── class-cache.php                  # Système de cache
+│       └── class-helper.php                 # Fonctions d'aide
+│
+├── templates/                               # Templates réutilisables
+│   ├── admin/                               # Templates admin
+│   │   ├── metaboxes/                       # Meta-boxes
+│   │   │   ├── amazon-product-info.php      # Info produit Amazon
+│   │   │   └── sync-settings.php            # Réglages sync
+│   │   └── widgets/                         # Widgets admin
+│   │       └── import-status.php            # Statut d'importation
+│   └── public/                              # Templates publics
+│       └── shortcodes/                      # Shortcodes
+│           └── amazon-product.php           # Affichage produit Amazon
+│
+├── assets/                                  # Ressources statiques
+│   ├── images/                              # Images du plugin
+│   │   ├── amazon-logo.png                  # Logo Amazon
+│   │   ├── import-icon.svg                  # Icône d'import
+│   │   └── loader.gif                       # Animation de chargement
+│   ├── fonts/                               # Polices personnalisées
+│   └── icons/                               # Icônes
+│       ├── success.svg                      # Icône succès
+│       ├── error.svg                        # Icône erreur
+│       └── warning.svg                      # Icône avertissement
+│
+├── languages/                               # Traductions
+│   ├── amazon-product-importer.pot          # Fichier de traduction principal
+│   ├── amazon-product-importer-fr_FR.po     # Traduction française
+│   └── amazon-product-importer-fr_FR.mo     # Traduction française compilée
+│
+├── tests/                                   # Tests unitaires
+│   ├── bootstrap.php                        # Bootstrap des tests
+│   ├── test-amazon-api.php                  # Tests API Amazon
+│   ├── test-product-import.php              # Tests d'importation
+│   └── test-cron-jobs.php                   # Tests tâches cron
+│
+├── docs/                                    # Documentation
+│   ├── installation.md                      # Guide d'installation
+│   ├── configuration.md                     # Guide de configuration
+│   ├── api-reference.md                     # Référence API
+│   └── troubleshooting.md                   # Guide de dépannage
+│
+├── config/                                  # Fichiers de configuration
+│   ├── settings-defaults.php                # Paramètres par défaut
+│   ├── api-endpoints.php                    # Points d'entrée API
+│   └── cron-schedules.php                   # Planning des tâches cron
+│
+└── vendor/                                  # Dependencies (si Composer)
+    └── autoload.php                         # Autoloader Composer
+
+
+
+Fichiers de configuration supplémentaires
+composer.json                                # Configuration Composer
+package.json                                 # Configuration npm/yarn
+webpack.config.js                            # Configuration Webpack (si applicable)
+.gitignore                                   # Fichiers ignorés par Git
+.phpcs.xml                                   # Configuration PHP CodeSniffer
+phpunit.xml                                  # Configuration PHPUnit

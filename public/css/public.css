@@ -1,0 +1,434 @@
+/**
+ * Amazon Product Importer - Public Styles
+ *
+ * Styles pour la partie publique du plugin
+ *
+ * @package    Amazon_Product_Importer
+ * @subpackage Amazon_Product_Importer/public/css
+ * @since      1.0.0
+ */
+
+/* ==========================================================================
+   Variables CSS
+   ========================================================================== */
+:root {
+    --api-primary-color: #ff9900;
+    --api-primary-dark: #e68a00;
+    --api-secondary-color: #232f3e;
+    --api-text-color: #333333;
+    --api-text-light: #666666;
+    --api-border-color: #dddddd;
+    --api-success-color: #28a745;
+    --api-warning-color: #ffc107;
+    --api-error-color: #dc3545;
+    --api-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --api-border-radius: 4px;
+    --api-transition: all 0.3s ease;
+}
+
+/* ==========================================================================
+   Styles généraux du plugin
+   ========================================================================== */
+.amazon-product-importer {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    color: var(--api-text-color);
+}
+
+/* ==========================================================================
+   Badge Amazon sur les produits
+   ========================================================================== */
+.amazon-product-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    background: var(--api-primary-color);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    border-radius: var(--api-border-radius);
+    margin: 5px 0;
+    text-decoration: none;
+    transition: var(--api-transition);
+}
+
+.amazon-product-badge:hover {
+    background: var(--api-primary-dark);
+    color: white;
+    text-decoration: none;
+}
+
+.amazon-product-badge::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 30"><path fill="white" d="M50 22.5c-8.5 0-16.2-3.2-22-8.5-.5-.4-.1-1 .5-.7 6.2 3.6 13.9 5.7 21.8 5.7s15.6-2.1 21.8-5.7c.6-.3 1 .3.5.7-5.8 5.3-13.5 8.5-22 8.5z"/><path fill="white" d="M53.4 18.9c-.3-.4-2.2-.2-3 .1-.3.1-.3-.2-.1-.4 1.5-1.1 3.9-.8 4.2-.4.3.4-.1 3.2-1.7 4.5-.2.2-.5.1-.4-.2.3-.8.9-2.6.9-3.6z"/></svg>');
+    background-size: contain;
+    background-repeat: no-repeat;
+    margin-right: 4px;
+}
+
+/* ==========================================================================
+   Informations produit Amazon
+   ========================================================================== */
+.amazon-product-info {
+    background: #f8f9fa;
+    border: 1px solid var(--api-border-color);
+    border-radius: var(--api-border-radius);
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.amazon-product-info h4 {
+    margin: 0 0 10px 0;
+    color: var(--api-secondary-color);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.amazon-product-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.amazon-product-meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    background: white;
+    border-radius: var(--api-border-radius);
+    border: 1px solid #e9ecef;
+}
+
+.amazon-product-meta-label {
+    font-weight: 500;
+    color: var(--api-text-light);
+    font-size: 12px;
+}
+
+.amazon-product-meta-value {
+    font-weight: 600;
+    color: var(--api-text-color);
+    font-size: 12px;
+}
+
+/* ==========================================================================
+   ASIN et identifiants Amazon
+   ========================================================================== */
+.amazon-asin {
+    font-family: 'Courier New', monospace;
+    background: #f1f3f4;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    border: 1px solid #dadce0;
+}
+
+.amazon-link {
+    display: inline-flex;
+    align-items: center;
+    color: var(--api-primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--api-transition);
+}
+
+.amazon-link:hover {
+    color: var(--api-primary-dark);
+    text-decoration: underline;
+}
+
+.amazon-link::after {
+    content: '↗';
+    margin-left: 4px;
+    font-size: 12px;
+}
+
+/* ==========================================================================
+   Shortcode Amazon Product
+   ========================================================================== */
+.amazon-product-shortcode {
+    border: 1px solid var(--api-border-color);
+    border-radius: var(--api-border-radius);
+    padding: 20px;
+    margin: 20px 0;
+    background: white;
+    box-shadow: var(--api-shadow);
+}
+
+.amazon-product-shortcode .product-title {
+    margin: 0 0 10px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--api-secondary-color);
+}
+
+.amazon-product-shortcode .product-image {
+    float: left;
+    margin: 0 15px 15px 0;
+    max-width: 150px;
+    border-radius: var(--api-border-radius);
+}
+
+.amazon-product-shortcode .product-description {
+    margin: 10px 0;
+    line-height: 1.6;
+}
+
+.amazon-product-shortcode .product-price {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--api-primary-color);
+    margin: 10px 0;
+}
+
+.amazon-product-shortcode .product-price .old-price {
+    text-decoration: line-through;
+    color: var(--api-text-light);
+    font-weight: 400;
+    font-size: 16px;
+    margin-right: 10px;
+}
+
+.amazon-product-shortcode .product-cta {
+    margin-top: 15px;
+    clear: both;
+}
+
+.amazon-product-shortcode .amazon-buy-button {
+    display: inline-block;
+    background: var(--api-primary-color);
+    color: white;
+    padding: 12px 24px;
+    text-decoration: none;
+    border-radius: var(--api-border-radius);
+    font-weight: 600;
+    transition: var(--api-transition);
+    border: none;
+    cursor: pointer;
+}
+
+.amazon-product-shortcode .amazon-buy-button:hover {
+    background: var(--api-primary-dark);
+    color: white;
+    text-decoration: none;
+}
+
+/* ==========================================================================
+   Statuts de synchronisation
+   ========================================================================== */
+.amazon-sync-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: var(--api-border-radius);
+    font-size: 11px;
+    font-weight: 500;
+    margin: 5px 0;
+}
+
+.amazon-sync-status.status-synced {
+    background: #d4edda;
+    color: var(--api-success-color);
+    border: 1px solid #c3e6cb;
+}
+
+.amazon-sync-status.status-pending {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #faeeba;
+}
+
+.amazon-sync-status.status-error {
+    background: #f8d7da;
+    color: var(--api-error-color);
+    border: 1px solid #f5c6cb;
+}
+
+.amazon-sync-status::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+.amazon-sync-status.status-synced::before {
+    background: var(--api-success-color);
+}
+
+.amazon-sync-status.status-pending::before {
+    background: var(--api-warning-color);
+}
+
+.amazon-sync-status.status-error::before {
+    background: var(--api-error-color);
+}
+
+/* ==========================================================================
+   Variations Amazon
+   ========================================================================== */
+.amazon-variations-info {
+    margin: 15px 0;
+    padding: 12px;
+    background: #f8f9fa;
+    border-left: 3px solid var(--api-primary-color);
+    border-radius: 0 var(--api-border-radius) var(--api-border-radius) 0;
+}
+
+.amazon-variations-info h5 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: var(--api-secondary-color);
+}
+
+.amazon-variations-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.amazon-variation-tag {
+    background: white;
+    border: 1px solid var(--api-border-color);
+    padding: 4px 8px;
+    border-radius: var(--api-border-radius);
+    font-size: 11px;
+    color: var(--api-text-color);
+}
+
+/* ==========================================================================
+   Messages et notifications
+   ========================================================================== */
+.amazon-notice {
+    padding: 12px 16px;
+    margin: 15px 0;
+    border-radius: var(--api-border-radius);
+    border-left: 4px solid;
+}
+
+.amazon-notice.notice-info {
+    background: #e7f3ff;
+    border-left-color: #2196f3;
+    color: #0c5aa6;
+}
+
+.amazon-notice.notice-success {
+    background: #d4edda;
+    border-left-color: var(--api-success-color);
+    color: #155724;
+}
+
+.amazon-notice.notice-warning {
+    background: #fff3cd;
+    border-left-color: var(--api-warning-color);
+    color: #856404;
+}
+
+.amazon-notice.notice-error {
+    background: #f8d7da;
+    border-left-color: var(--api-error-color);
+    color: #721c24;
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+@media (max-width: 768px) {
+    .amazon-product-meta {
+        grid-template-columns: 1fr;
+    }
+    
+    .amazon-product-shortcode .product-image {
+        float: none;
+        display: block;
+        margin: 0 auto 15px auto;
+    }
+    
+    .amazon-variations-list {
+        flex-direction: column;
+    }
+    
+    .amazon-product-meta-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+}
+
+@media (max-width: 480px) {
+    .amazon-product-shortcode {
+        padding: 15px;
+        margin: 15px 0;
+    }
+    
+    .amazon-product-shortcode .product-title {
+        font-size: 16px;
+    }
+    
+    .amazon-product-shortcode .product-price {
+        font-size: 18px;
+    }
+}
+
+/* ==========================================================================
+   Animations et transitions
+   ========================================================================== */
+@keyframes amazonPulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.amazon-loading {
+    animation: amazonPulse 1.5s infinite;
+}
+
+.amazon-fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   Utilitaires
+   ========================================================================== */
+.amazon-text-center { text-align: center; }
+.amazon-text-right { text-align: right; }
+.amazon-text-left { text-align: left; }
+
+.amazon-mt-10 { margin-top: 10px; }
+.amazon-mb-10 { margin-bottom: 10px; }
+.amazon-ml-10 { margin-left: 10px; }
+.amazon-mr-10 { margin-right: 10px; }
+
+.amazon-hidden { display: none !important; }
+.amazon-visible { display: block !important; }
+
+/* ==========================================================================
+   Print Styles
+   ========================================================================== */
+@media print {
+    .amazon-product-badge,
+    .amazon-sync-status,
+    .amazon-buy-button {
+        display: none;
+    }
+    
+    .amazon-product-info {
+        border: 1px solid #ccc;
+        background: white;
+    }
+    
+    .amazon-link::after {
+        content: ' (' attr(href) ')';
+    }
+}

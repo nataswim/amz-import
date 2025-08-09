@@ -1,0 +1,8 @@
+msgid "Import Amazon Product"
+msgstr "Importer un produit Amazon"
+
+msgid "ASIN is required."
+msgstr "L’ASIN est requis."
+
+msgid "Settings saved successfully."
+msgstr "Paramètres enregistrés avec succès."

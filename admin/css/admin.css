@@ -1,0 +1,65 @@
+/* Conteneur principal */
+.amazon-importer-admin {
+    padding: 20px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    font-family: Arial, sans-serif;
+}
+
+/* Zones spécifiques */
+.import-section,
+.settings-section {
+    margin-bottom: 30px;
+    background: #fff;
+    padding: 15px;
+    border: 1px solid #ccc;
+}
+
+/* Titres */
+.amazon-importer-admin h2 {
+    font-size: 20px;
+    margin-bottom: 15px;
+    color: #23282d;
+}
+
+/* Boutons */
+.button-primary {
+    background-color: #0073aa;
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    cursor: pointer;
+}
+
+.button-primary:hover {
+    background-color: #006799;
+}
+
+.button-danger {
+    background-color: #d63638;
+    color: #fff;
+    padding: 8px 14px;
+    border: none;
+    cursor: pointer;
+}
+
+.button-danger:hover {
+    background-color: #b32d2e;
+}
+
+/* Messages de statut */
+.status-message {
+    margin-top: 10px;
+    padding: 10px;
+    border-left: 4px solid #0073aa;
+    background: #e5f4fb;
+}
+
+/* Loader */
+.loader {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background: url('../../assets/images/loader.gif') no-repeat center center;
+    background-size: contain;
+}
