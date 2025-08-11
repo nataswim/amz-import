@@ -2,7 +2,7 @@
 /**
  * Amazon API Authentication for PA-API 5.0
  *
- * @link       https://yourwebsite.com
+ * @link       https://mycreanet.fr
  * @since      1.0.0
  *
  * @package    Amazon_Product_Importer
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
  *
  * @package    Amazon_Product_Importer
  * @subpackage Amazon_Product_Importer/includes/api
- * @author     Your Name <email@example.com>
+ * @author     Your Name <https://mycreanet.fr>
  */
 class Amazon_Product_Importer_Amazon_Auth {
 

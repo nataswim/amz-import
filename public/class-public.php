@@ -18,7 +18,7 @@
  *
  * @package    Amazon_Product_Importer
  * @subpackage Amazon_Product_Importer/public
- * @author     Your Name <email@example.com>
+ * @author     Your Name <https://mycreanet.fr>
  */
 class Amazon_Product_Importer_Public {
 

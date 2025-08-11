@@ -6,7 +6,7 @@
  * These values are used when the plugin is first activated
  * or when settings are reset to defaults.
  *
- * @link       https://yourwebsite.com
+ * @link       https://mycreanet.fr
  * @since      1.0.0
  *
  * @package    Amazon_Product_Importer

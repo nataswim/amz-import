@@ -42,7 +42,7 @@ git push origin main
 
 ```bash
 git config --global user.name "Votre Nom"
-git config --global user.email "votre.email@example.com"
+git config --global user.email "votre.https://mycreanet.fr"
 ```
 
 Cloner le repository :  
@@ -130,7 +130,7 @@ chore: Maintenance générale
 
 - **Clé SSH** :  
 ```bash
-ssh-keygen -t ed25519 -C "votre.email@example.com"
+ssh-keygen -t ed25519 -C "votre.https://mycreanet.fr"
 ```
 Ajouter la clé publique dans **GitHub → Settings → SSH and GPG keys**  
 

@@ -5,7 +5,7 @@
  * This file contains all API endpoint configurations, supported operations,
  * and regional settings for the Amazon Product Advertising API.
  *
- * @link       https://yourwebsite.com
+ * @link       https://mycreanet.fr
  * @since      1.0.0
  *
  * @package    Amazon_Product_Importer

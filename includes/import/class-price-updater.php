@@ -3,7 +3,7 @@
 /**
  * The price updating functionality of the plugin.
  *
- * @link       https://example.com
+ * @link       https://mycreanet.fr
  * @since      1.0.0
  *
  * @package    Amazon_Product_Importer
@@ -17,7 +17,7 @@
  *
  * @package    Amazon_Product_Importer
  * @subpackage Amazon_Product_Importer/includes/import
- * @author     Your Name <email@example.com>
+ * @author     Your Name <https://mycreanet.fr>
  */
 class Amazon_Product_Importer_Price_Updater {
 

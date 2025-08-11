@@ -5,7 +5,7 @@
  * This file displays the real-time import progress interface
  * with statistics, logs, and controls.
  *
- * @link       https://yourwebsite.com
+ * @link       https://mycreanet.fr
  * @since      1.0.0
  *
  * @package    Amazon_Product_Importer
@@ -42,6 +42,19 @@ if (!$batch_data) {
 
 $progress_percentage = $batch_data['total'] > 0 ? round(($batch_data['processed'] / $batch_data['total']) * 100, 1) : 0;
 $elapsed_time = current_time('timestamp') - $batch_data['start_time'];
+
+// Helper function for duration formatting
+function format_duration($seconds) {
+    if ($seconds < 60) {
+        return sprintf('%02d:%02d', 0, $seconds);
+    } elseif ($seconds < 3600) {
+        return sprintf('%02d:%02d', floor($seconds / 60), $seconds % 60);
+    } else {
+        $hours = floor($seconds / 3600);
+        $minutes = floor(($seconds % 3600) / 60);
+        return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds % 60);
+    }
+}
 ?>
 
 <div class="wrap amazon-import-progress-page">
@@ -190,7 +203,7 @@ $elapsed_time = current_time('timestamp') - $batch_data['start_time'];
                     <div class="amazon-timing-item">
                         <span class="amazon-timing-label"><?php echo esc_html__('Elapsed:', 'amazon-product-importer'); ?></span>
                         <span class="amazon-timing-value amazon-elapsed-time">
-                            <?php echo $this->format_duration($elapsed_time); ?>
+                            <?php echo format_duration($elapsed_time); ?>
                         </span>
                     </div>
                     
@@ -201,7 +214,7 @@ $elapsed_time = current_time('timestamp') - $batch_data['start_time'];
                             if ($batch_data['processed'] > 0 && $batch_data['status'] === 'running') {
                                 $rate = $batch_data['processed'] / max($elapsed_time, 1);
                                 $estimated_total = $batch_data['total'] / max($rate, 0.01);
-                                echo $this->format_duration($estimated_total);
+                                echo format_duration($estimated_total);
                             } else {
                                 echo '--:--';
                             }
@@ -216,7 +229,7 @@ $elapsed_time = current_time('timestamp') - $batch_data['start_time'];
                             if ($batch_data['processed'] > 0 && $batch_data['status'] === 'running') {
                                 $rate = $batch_data['processed'] / max($elapsed_time, 1);
                                 $remaining_time = ($batch_data['total'] - $batch_data['processed']) / max($rate, 0.01);
-                                echo $this->format_duration($remaining_time);
+                                echo format_duration($remaining_time);
                             } else {
                                 echo '--:--';
                             }
@@ -230,210 +243,116 @@ $elapsed_time = current_time('timestamp') - $batch_data['start_time'];
         <!-- Current Product -->
         <?php if ($batch_data['status'] === 'running' && !empty($batch_data['current_asin'])): ?>
         <div class="amazon-current-product">
-            <div class="amazon-current-product-header">
-                <h3><?php echo esc_html__('Currently Processing', 'amazon-product-importer'); ?></h3>
-            </div>
-            <div class="amazon-current-product-content">
-                <div class="amazon-current-asin">
-                    <span class="amazon-current-label"><?php echo esc_html__('ASIN:', 'amazon-product-importer'); ?></span>
-                    <span class="amazon-current-value"><?php echo esc_html($batch_data['current_asin']); ?></span>
-                </div>
-                <?php if (!empty($batch_data['current_product'])): ?>
-                <div class="amazon-current-title">
-                    <span class="amazon-current-label"><?php echo esc_html__('Product:', 'amazon-product-importer'); ?></span>
-                    <span class="amazon-current-value"><?php echo esc_html($batch_data['current_product']); ?></span>
-                </div>
-                <?php endif; ?>
-                <div class="amazon-current-spinner">
-                    <span class="spinner is-active"></span>
+            <div class="amazon-progress-card">
+                <h3 class="amazon-current-title">
+                    <?php echo esc_html__('Currently Processing', 'amazon-product-importer'); ?>
+                </h3>
+                
+                <div class="amazon-current-product-info">
+                    <div class="amazon-current-asin">
+                        <strong><?php echo esc_html__('ASIN:', 'amazon-product-importer'); ?></strong>
+                        <span class="amazon-asin-value"><?php echo esc_html($batch_data['current_asin']); ?></span>
+                    </div>
+                    
+                    <?php if (!empty($batch_data['current_product'])): ?>
+                    <div class="amazon-current-name">
+                        <strong><?php echo esc_html__('Product:', 'amazon-product-importer'); ?></strong>
+                        <span class="amazon-product-name"><?php echo esc_html($batch_data['current_product']); ?></span>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <div class="amazon-current-progress">
+                        <div class="amazon-processing-spinner"></div>
+                        <span class="amazon-processing-text">
+                            <?php echo esc_html__('Importing...', 'amazon-product-importer'); ?>
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
         <?php endif; ?>
 
-        <!-- Import Results -->
-        <div class="amazon-import-results">
-            <div class="amazon-results-tabs">
-                <button type="button" 
-                        class="amazon-tab-btn active" 
-                        data-tab="all">
-                    <?php echo esc_html__('All Products', 'amazon-product-importer'); ?>
-                    <span class="amazon-tab-count"><?php echo number_format_i18n($batch_data['processed']); ?></span>
-                </button>
-                
-                <button type="button" 
-                        class="amazon-tab-btn" 
-                        data-tab="success">
-                    <?php echo esc_html__('Successful', 'amazon-product-importer'); ?>
-                    <span class="amazon-tab-count"><?php echo number_format_i18n($batch_data['success']); ?></span>
-                </button>
-                
-                <button type="button" 
-                        class="amazon-tab-btn" 
-                        data-tab="failed">
-                    <?php echo esc_html__('Failed', 'amazon-product-importer'); ?>
-                    <span class="amazon-tab-count"><?php echo number_format_i18n($batch_data['failed']); ?></span>
-                </button>
-                
-                <button type="button" 
-                        class="amazon-tab-btn" 
-                        data-tab="skipped">
-                    <?php echo esc_html__('Skipped', 'amazon-product-importer'); ?>
-                    <span class="amazon-tab-count"><?php echo number_format_i18n($batch_data['skipped']); ?></span>
-                </button>
-            </div>
-
-            <div class="amazon-results-content">
-                <div class="amazon-results-header">
-                    <div class="amazon-results-search">
-                        <input type="text" 
-                               id="amazon-results-search" 
-                               class="amazon-search-input" 
-                               placeholder="<?php echo esc_attr__('Search products...', 'amazon-product-importer'); ?>">
-                        <button type="button" class="button amazon-search-clear" style="display: none;">
-                            <?php echo esc_html__('Clear', 'amazon-product-importer'); ?>
-                        </button>
-                    </div>
+        <!-- Product List -->
+        <div class="amazon-product-list">
+            <div class="amazon-progress-card">
+                <div class="amazon-product-list-header">
+                    <h3><?php echo esc_html__('Product Import Log', 'amazon-product-importer'); ?></h3>
                     
-                    <div class="amazon-results-actions">
+                    <div class="amazon-list-controls">
+                        <select id="amazon-status-filter" class="amazon-filter-select">
+                            <option value=""><?php echo esc_html__('All Status', 'amazon-product-importer'); ?></option>
+                            <option value="success"><?php echo esc_html__('Success', 'amazon-product-importer'); ?></option>
+                            <option value="failed"><?php echo esc_html__('Failed', 'amazon-product-importer'); ?></option>
+                            <option value="skipped"><?php echo esc_html__('Skipped', 'amazon-product-importer'); ?></option>
+                            <option value="pending"><?php echo esc_html__('Pending', 'amazon-product-importer'); ?></option>
+                        </select>
+                        
                         <button type="button" 
-                                class="button button-small amazon-refresh-results">
+                                id="amazon-refresh-list-btn" 
+                                class="button button-secondary">
                             <span class="dashicons dashicons-update"></span>
                             <?php echo esc_html__('Refresh', 'amazon-product-importer'); ?>
                         </button>
-                        
-                        <select id="amazon-results-per-page" class="amazon-results-per-page">
-                            <option value="10">10 <?php echo esc_html__('per page', 'amazon-product-importer'); ?></option>
-                            <option value="25" selected>25 <?php echo esc_html__('per page', 'amazon-product-importer'); ?></option>
-                            <option value="50">50 <?php echo esc_html__('per page', 'amazon-product-importer'); ?></option>
-                            <option value="100">100 <?php echo esc_html__('per page', 'amazon-product-importer'); ?></option>
-                        </select>
                     </div>
                 </div>
-
-                <div id="amazon-results-table-container" class="amazon-results-table-container">
-                    <table class="wp-list-table widefat fixed striped amazon-results-table">
-                        <thead>
-                            <tr>
-                                <th class="amazon-col-asin">
-                                    <?php echo esc_html__('ASIN', 'amazon-product-importer'); ?>
-                                </th>
-                                <th class="amazon-col-title">
-                                    <?php echo esc_html__('Product Title', 'amazon-product-importer'); ?>
-                                </th>
-                                <th class="amazon-col-status">
-                                    <?php echo esc_html__('Status', 'amazon-product-importer'); ?>
-                                </th>
-                                <th class="amazon-col-time">
-                                    <?php echo esc_html__('Time', 'amazon-product-importer'); ?>
-                                </th>
-                                <th class="amazon-col-actions">
-                                    <?php echo esc_html__('Actions', 'amazon-product-importer'); ?>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody id="amazon-results-tbody">
-                            <?php if (!empty($batch_data['products'])): ?>
-                                <?php foreach ($batch_data['products'] as $product_result): ?>
-                                <tr class="amazon-result-row amazon-status-<?php echo esc_attr($product_result['status']); ?>" 
-                                    data-asin="<?php echo esc_attr($product_result['asin']); ?>"
-                                    data-status="<?php echo esc_attr($product_result['status']); ?>">
-                                    
-                                    <td class="amazon-col-asin">
-                                        <a href="https://amazon.com/dp/<?php echo esc_attr($product_result['asin']); ?>" 
-                                           target="_blank" 
-                                           title="<?php echo esc_attr__('View on Amazon', 'amazon-product-importer'); ?>">
-                                            <?php echo esc_html($product_result['asin']); ?>
-                                            <span class="dashicons dashicons-external"></span>
-                                        </a>
-                                    </td>
-                                    
-                                    <td class="amazon-col-title">
-                                        <?php if (!empty($product_result['product_id'])): ?>
-                                        <a href="<?php echo get_edit_post_link($product_result['product_id']); ?>" 
-                                           title="<?php echo esc_attr__('Edit Product', 'amazon-product-importer'); ?>">
-                                            <?php echo esc_html($product_result['title']); ?>
-                                        </a>
-                                        <?php else: ?>
-                                        <?php echo esc_html($product_result['title']); ?>
-                                        <?php endif; ?>
-                                    </td>
-                                    
-                                    <td class="amazon-col-status">
-                                        <span class="amazon-status-badge amazon-status-<?php echo esc_attr($product_result['status']); ?>">
-                                            <?php 
-                                            switch ($product_result['status']) {
-                                                case 'success':
-                                                    echo esc_html__('Success', 'amazon-product-importer');
-                                                    break;
-                                                case 'failed':
-                                                    echo esc_html__('Failed', 'amazon-product-importer');
-                                                    break;
-                                                case 'skipped':
-                                                    echo esc_html__('Skipped', 'amazon-product-importer');
-                                                    break;
-                                                default:
-                                                    echo esc_html(ucfirst($product_result['status']));
-                                            }
-                                            ?>
-                                        </span>
-                                        
-                                        <?php if (!empty($product_result['message'])): ?>
-                                        <div class="amazon-status-message">
-                                            <?php echo esc_html($product_result['message']); ?>
-                                        </div>
-                                        <?php endif; ?>
-                                    </td>
-                                    
-                                    <td class="amazon-col-time">
-                                        <?php if (!empty($product_result['processed_time'])): ?>
-                                        <span title="<?php echo esc_attr(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($product_result['processed_time']))); ?>">
-                                            <?php echo human_time_diff(strtotime($product_result['processed_time']), current_time('timestamp')); ?>
-                                            <?php echo esc_html__('ago', 'amazon-product-importer'); ?>
-                                        </span>
-                                        <?php endif; ?>
-                                    </td>
-                                    
-                                    <td class="amazon-col-actions">
-                                        <div class="amazon-row-actions">
-                                            <?php if ($product_result['status'] === 'failed'): ?>
-                                            <button type="button" 
-                                                    class="button button-small amazon-retry-btn" 
-                                                    data-asin="<?php echo esc_attr($product_result['asin']); ?>"
-                                                    title="<?php echo esc_attr__('Retry Import', 'amazon-product-importer'); ?>">
-                                                <span class="dashicons dashicons-update"></span>
-                                                <?php echo esc_html__('Retry', 'amazon-product-importer'); ?>
-                                            </button>
-                                            <?php endif; ?>
-                                            
-                                            <button type="button" 
-                                                    class="button button-small amazon-details-btn" 
-                                                    data-asin="<?php echo esc_attr($product_result['asin']); ?>"
-                                                    title="<?php echo esc_attr__('View Details', 'amazon-product-importer'); ?>">
-                                                <span class="dashicons dashicons-info"></span>
-                                                <?php echo esc_html__('Details', 'amazon-product-importer'); ?>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                            <tr class="amazon-no-results">
-                                <td colspan="5" class="amazon-no-results-cell">
-                                    <div class="amazon-no-results-content">
-                                        <span class="dashicons dashicons-info"></span>
-                                        <?php echo esc_html__('No products processed yet.', 'amazon-product-importer'); ?>
-                                    </div>
-                                </td>
-                            </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                <div id="amazon-results-pagination" class="amazon-pagination" style="display: none;">
-                    <!-- Pagination will be populated via JavaScript -->
+                
+                <div class="amazon-product-list-container" id="amazon-product-list">
+                    <?php if (!empty($batch_data['products'])): ?>
+                    <div class="amazon-product-items">
+                        <?php foreach ($batch_data['products'] as $product): ?>
+                        <div class="amazon-product-item amazon-status-<?php echo esc_attr($product['status']); ?>" 
+                             data-asin="<?php echo esc_attr($product['asin']); ?>">
+                            
+                            <div class="amazon-product-status">
+                                <span class="amazon-status-icon"></span>
+                            </div>
+                            
+                            <div class="amazon-product-info">
+                                <div class="amazon-product-asin">
+                                    <strong><?php echo esc_html($product['asin']); ?></strong>
+                                </div>
+                                
+                                <?php if (!empty($product['title'])): ?>
+                                <div class="amazon-product-title">
+                                    <?php echo esc_html($product['title']); ?>
+                                </div>
+                                <?php endif; ?>
+                                
+                                <div class="amazon-product-timestamp">
+                                    <?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $product['timestamp'])); ?>
+                                </div>
+                            </div>
+                            
+                            <div class="amazon-product-actions">
+                                <?php if ($product['status'] === 'success' && !empty($product['product_id'])): ?>
+                                <a href="<?php echo admin_url('post.php?post=' . $product['product_id'] . '&action=edit'); ?>" 
+                                   class="button button-small amazon-view-product">
+                                    <?php echo esc_html__('View Product', 'amazon-product-importer'); ?>
+                                </a>
+                                <?php endif; ?>
+                                
+                                <?php if ($product['status'] === 'failed'): ?>
+                                <button type="button" 
+                                        class="button button-small amazon-retry-product" 
+                                        data-asin="<?php echo esc_attr($product['asin']); ?>">
+                                    <?php echo esc_html__('Retry', 'amazon-product-importer'); ?>
+                                </button>
+                                <?php endif; ?>
+                                
+                                <button type="button" 
+                                        class="button button-small amazon-view-details" 
+                                        data-asin="<?php echo esc_attr($product['asin']); ?>">
+                                    <?php echo esc_html__('Details', 'amazon-product-importer'); ?>
+                                </button>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php else: ?>
+                    <div class="amazon-empty-list">
+                        <p><?php echo esc_html__('No products in the import queue yet.', 'amazon-product-importer'); ?></p>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -441,40 +360,42 @@ $elapsed_time = current_time('timestamp') - $batch_data['start_time'];
         <!-- Error Log -->
         <?php if (!empty($batch_data['errors'])): ?>
         <div class="amazon-error-log">
-            <div class="amazon-error-log-header">
-                <h3><?php echo esc_html__('Error Log', 'amazon-product-importer'); ?></h3>
-                <button type="button" class="button button-small amazon-clear-errors">
-                    <?php echo esc_html__('Clear Errors', 'amazon-product-importer'); ?>
-                </button>
-            </div>
-            
-            <div class="amazon-error-log-content">
-                <?php foreach ($batch_data['errors'] as $error): ?>
-                <div class="amazon-error-item">
-                    <div class="amazon-error-time">
-                        <?php echo esc_html(date_i18n(get_option('time_format'), strtotime($error['time']))); ?>
+            <div class="amazon-progress-card">
+                <h3 class="amazon-error-title">
+                    <?php echo esc_html__('Import Errors', 'amazon-product-importer'); ?>
+                    <span class="amazon-error-count">(<?php echo count($batch_data['errors']); ?>)</span>
+                </h3>
+                
+                <div class="amazon-error-list">
+                    <?php foreach ($batch_data['errors'] as $error): ?>
+                    <div class="amazon-error-item">
+                        <div class="amazon-error-time">
+                            <?php echo esc_html(date_i18n(get_option('time_format'), $error['timestamp'])); ?>
+                        </div>
+                        <div class="amazon-error-message">
+                            <?php echo esc_html($error['message']); ?>
+                        </div>
+                        <?php if (!empty($error['asin'])): ?>
+                        <div class="amazon-error-asin">
+                            ASIN: <?php echo esc_html($error['asin']); ?>
+                        </div>
+                        <?php endif; ?>
                     </div>
-                    <div class="amazon-error-message">
-                        <?php echo esc_html($error['message']); ?>
-                    </div>
-                    <?php if (!empty($error['asin'])): ?>
-                    <div class="amazon-error-asin">
-                        ASIN: <?php echo esc_html($error['asin']); ?>
-                    </div>
-                    <?php endif; ?>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
             </div>
         </div>
         <?php endif; ?>
+
     </div>
 </div>
 
 <!-- Product Details Modal -->
 <div id="amazon-product-details-modal" class="amazon-modal" style="display: none;">
-    <div class="amazon-modal-content amazon-modal-large">
+    <div class="amazon-modal-overlay"></div>
+    <div class="amazon-modal-content">
         <div class="amazon-modal-header">
-            <h2><?php echo esc_html__('Product Import Details', 'amazon-product-importer'); ?></h2>
+            <h3><?php echo esc_html__('Product Details', 'amazon-product-importer'); ?></h3>
             <button type="button" class="amazon-modal-close">&times;</button>
         </div>
         <div class="amazon-modal-body">
@@ -504,23 +425,3 @@ $elapsed_time = current_time('timestamp') - $batch_data['start_time'];
         }
     };
 </script>
-
-<?php
-// Helper method to format duration
-if (!method_exists($this, 'format_duration')) {
-    /**
-     * Format duration in seconds to human readable format
-     */
-    function format_duration($seconds) {
-        if ($seconds < 60) {
-            return sprintf('%02d:%02d', 0, $seconds);
-        } elseif ($seconds < 3600) {
-            return sprintf('%02d:%02d', floor($seconds / 60), $seconds % 60);
-        } else {
-            $hours = floor($seconds / 3600);
-            $minutes = floor(($seconds % 3600) / 60);
-            return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds % 60);
-        }
-    }
-}
-?>

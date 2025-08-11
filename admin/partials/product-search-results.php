@@ -5,7 +5,7 @@
  * This file displays the search results from Amazon API
  * with import options and product details.
  *
- * @link       https://yourwebsite.com
+ * @link       https://mycreanet.fr
  * @since      1.0.0
  *
  * @package    Amazon_Product_Importer

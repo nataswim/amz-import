@@ -226,103 +226,213 @@
                 data: data,
                 success: (response) => {
                     if (response.success) {
-                        this.updatePriceElements(response.data);
+                        this.processPriceUpdates(response.data);
                     }
                 },
                 error: (xhr, status, error) => {
-                    if (amazonImporterPublic.debug) {
-                        console.error('Erreur de mise à jour des prix:', error);
-                    }
+                    console.error('Amazon Product Importer: Price update failed', error);
                 }
             });
         },
 
         /**
-         * Mise à jour des éléments de prix dans le DOM
+         * Traitement des mises à jour de prix
          */
-        updatePriceElements: function(priceData) {
-            Object.keys(priceData).forEach(asin => {
+        processPriceUpdates: function(updates) {
+            Object.keys(updates).forEach(asin => {
+                const priceData = updates[asin];
                 const $products = $(`.amazon-product-shortcode[data-amazon-asin="${asin}"]`);
-                const newPrice = priceData[asin];
                 
                 $products.each(function() {
                     const $product = $(this);
                     const $priceElement = $product.find('.amazon-product-price');
-                    const currentPrice = $priceElement.data('price');
                     
-                    if (currentPrice !== newPrice.current) {
-                        API.animatePriceChange($priceElement, newPrice);
+                    if ($priceElement.length && priceData.price) {
+                        const currentPrice = $priceElement.text();
+                        
+                        if (currentPrice !== priceData.formatted_price) {
+                            $priceElement.fadeOut(200, function() {
+                                $(this).text(priceData.formatted_price)
+                                       .addClass('amazon-price-updated')
+                                       .fadeIn(200);
+                                
+                                setTimeout(() => {
+                                    $(this).removeClass('amazon-price-updated');
+                                }, 2000);
+                            });
+                        }
                     }
                 });
             });
         },
 
         /**
-         * Animation du changement de prix
+         * Gestion du lazy loading des images
          */
-        animatePriceChange: function($element, newPrice) {
-            $element.addClass('price-updating');
-            
-            setTimeout(() => {
-                $element.html(this.formatPrice(newPrice));
-                $element.removeClass('price-updating').addClass('price-updated');
-                
-                setTimeout(() => {
-                    $element.removeClass('price-updated');
-                }, 2000);
-            }, this.config.animationDuration);
+        initLazyLoading: function() {
+            if (!this.config.lazyLoadImages) return;
+
+            const imageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const src = img.getAttribute('data-src');
+                        
+                        if (src) {
+                            img.src = src;
+                            img.classList.remove('amazon-lazy');
+                            img.classList.add('amazon-loaded');
+                            observer.unobserve(img);
+                        }
+                    }
+                });
+            });
+
+            document.querySelectorAll('.amazon-lazy').forEach(img => {
+                imageObserver.observe(img);
+            });
         },
 
         /**
-         * Formatage du prix
-         */
-        formatPrice: function(priceData) {
-            let html = '';
-            
-            if (priceData.old && priceData.old !== priceData.current) {
-                html += `<span class="old-price">${priceData.old}</span>`;
-            }
-            
-            html += `<span class="current-price">${priceData.current}</span>`;
-            
-            if (priceData.savings) {
-                html += `<span class="savings">Économisez ${priceData.savings}</span>`;
-            }
-            
-            return html;
-        },
-
-        /**
-         * Gestion des variations de produit
+         * Gestion des variations de produits
          */
         initVariationHandlers: function() {
-            this.elements.variationSelects.on('change', this.handleVariationChange.bind(this));
-        },
-
-        /**
-         * Gestion du changement de variation
-         */
-        handleVariationChange: function(event) {
-            const $select = $(event.target);
-            const $product = $select.closest('.amazon-product-shortcode');
-            const variationId = $select.val();
-            
-            if (variationId) {
-                this.loadVariationData($product, variationId);
-            }
+            this.elements.variationSelects.on('change', function() {
+                const $select = $(this);
+                const variationId = $select.val();
+                const $product = $select.closest('.amazon-product-shortcode');
+                
+                if (variationId) {
+                    API.loadVariationData($product, variationId);
+                }
+            });
         },
 
         /**
          * Chargement des données de variation
          */
         loadVariationData: function($product, variationId) {
+            const asin = $product.data('amazon-asin');
             const data = {
                 action: 'amazon_get_variation',
+                asin: asin,
                 variation_id: variationId,
                 nonce: amazonImporterPublic.nonce
             };
 
-            $product.addClass('amazon-loading');
+            $.ajax({
+                url: amazonImporterPublic.ajaxUrl,
+                type: 'POST',
+                data: data,
+                beforeSend: () => {
+                    $product.addClass('amazon-loading');
+                },
+                success: (response) => {
+                    if (response.success) {
+                        this.updateProductDisplay($product, response.data);
+                    }
+                },
+                complete: () => {
+                    $product.removeClass('amazon-loading');
+                },
+                error: (xhr, status, error) => {
+                    console.error('Amazon Product Importer: Variation loading failed', error);
+                }
+            });
+        },
+
+        /**
+         * Mise à jour de l'affichage du produit
+         */
+        updateProductDisplay: function($product, data) {
+            // Mise à jour du prix
+            if (data.price) {
+                $product.find('.amazon-product-price').text(data.price);
+            }
+
+            // Mise à jour de l'image
+            if (data.image) {
+                $product.find('.amazon-product-image img').attr('src', data.image);
+            }
+
+            // Mise à jour de la disponibilité
+            if (data.availability) {
+                $product.find('.amazon-availability').text(data.availability);
+            }
+
+            // Animation de mise à jour
+            $product.addClass('amazon-updated');
+            setTimeout(() => {
+                $product.removeClass('amazon-updated');
+            }, 1000);
+        },
+
+        /**
+         * Gestion des clics sur les boutons d'achat
+         */
+        handleBuyButtonClick: function(e) {
+            const $button = $(e.currentTarget);
+            const asin = $button.data('asin');
+            const affiliateTag = $button.data('affiliate-tag');
+            
+            // Tracking de l'événement
+            this.trackEvent('buy_button_click', {
+                asin: asin,
+                affiliate_tag: affiliateTag
+            });
+
+            // Laisser le comportement par défaut se produire
+            return true;
+        },
+
+        /**
+         * Gestion des clics sur les badges
+         */
+        handleBadgeClick: function(e) {
+            const $badge = $(e.currentTarget);
+            const badgeType = $badge.data('badge-type');
+            
+            this.trackEvent('badge_click', {
+                badge_type: badgeType
+            });
+        },
+
+        /**
+         * Gestion des changements de variation
+         */
+        handleVariationChange: function(e) {
+            const $select = $(e.currentTarget);
+            const variationId = $select.val();
+            const asin = $select.closest('.amazon-product-shortcode').data('amazon-asin');
+            
+            this.trackEvent('variation_change', {
+                asin: asin,
+                variation_id: variationId
+            });
+        },
+
+        /**
+         * Gestion du survol des produits
+         */
+        handleProductHover: function(e) {
+            const $product = $(e.currentTarget);
+            const asin = $product.data('amazon-asin');
+            
+            // Précharger les données du produit si nécessaire
+            this.preloadProductData(asin);
+        },
+
+        /**
+         * Préchargement des données produit
+         */
+        preloadProductData: function(asin) {
+            if (this.cache.has(asin)) return;
+
+            const data = {
+                action: 'amazon_preload_product',
+                asin: asin,
+                nonce: amazonImporterPublic.nonce
+            };
 
             $.ajax({
                 url: amazonImporterPublic.ajaxUrl,
@@ -330,331 +440,310 @@
                 data: data,
                 success: (response) => {
                     if (response.success) {
-                        this.updateProductWithVariation($product, response.data);
+                        this.cache.set(asin, response.data);
+                        
+                        // Nettoyer le cache après timeout
+                        setTimeout(() => {
+                            this.cache.delete(asin);
+                        }, this.config.cacheTimeout);
                     }
-                },
-                error: (xhr, status, error) => {
-                    this.showError($product, 'Erreur de chargement de la variation');
-                },
-                complete: () => {
-                    $product.removeClass('amazon-loading');
                 }
             });
         },
 
         /**
-         * Mise à jour du produit avec les données de variation
+         * Ajout de boutons de partage
          */
-        updateProductWithVariation: function($product, variationData) {
-            // Mise à jour du prix
-            if (variationData.price) {
-                const $priceElement = $product.find('.amazon-product-price');
-                $priceElement.html(this.formatPrice(variationData.price));
-            }
+        addShareButton: function($product) {
+            if ($product.find('.amazon-share-button').length) return;
 
-            // Mise à jour de l'image
-            if (variationData.image) {
-                const $image = $product.find('.product-image');
-                this.updateProductImage($image, variationData.image);
-            }
+            const productUrl = $product.data('product-url');
+            const productTitle = $product.data('product-title');
+            
+            if (productUrl) {
+                const $shareButton = $('<button class="amazon-share-button" title="Partager ce produit">')
+                    .append('<span class="dashicons dashicons-share"></span>')
+                    .on('click', (e) => {
+                        e.preventDefault();
+                        this.shareProduct(productUrl, productTitle);
+                    });
 
-            // Mise à jour de la disponibilité
-            if (variationData.availability) {
-                this.updateAvailability($product, variationData.availability);
-            }
-
-            // Mise à jour du lien d'achat
-            if (variationData.buy_url) {
-                $product.find('.amazon-buy-button').attr('href', variationData.buy_url);
+                $product.find('.amazon-product-actions').append($shareButton);
             }
         },
 
         /**
-         * Mise à jour de l'image du produit
+         * Partage de produit
          */
-        updateProductImage: function($image, imageData) {
-            const img = new Image();
-            img.onload = function() {
-                $image.fadeOut(API.config.animationDuration, function() {
-                    $image.attr('src', imageData.url);
-                    $image.attr('alt', imageData.alt || '');
-                    $image.fadeIn(API.config.animationDuration);
+        shareProduct: function(url, title) {
+            if (navigator.share) {
+                navigator.share({
+                    title: title,
+                    url: url
+                }).catch(err => console.log('Partage annulé', err));
+            } else {
+                // Fallback : copier dans le presse-papiers
+                navigator.clipboard.writeText(url).then(() => {
+                    this.showNotification(amazonImporterPublic.strings.linkCopied || 'Lien copié!');
                 });
-            };
-            img.src = imageData.url;
+            }
         },
 
         /**
-         * Gestion des clics sur les boutons d'achat
+         * Ajout de boutons wishlist
          */
-        handleBuyButtonClick: function(event) {
-            const $button = $(event.target);
-            const $product = $button.closest('.amazon-product-shortcode');
+        addWishlistButton: function($product) {
+            if ($product.find('.amazon-wishlist-button').length) return;
+
             const asin = $product.data('amazon-asin');
             
-            // Analytics
-            this.trackEvent('buy_button_click', {
-                asin: asin,
-                price: $product.find('.amazon-product-price').data('price'),
-                position: $product.index()
-            });
+            if (asin) {
+                const $wishlistButton = $('<button class="amazon-wishlist-button" title="Ajouter à la wishlist">')
+                    .append('<span class="dashicons dashicons-heart"></span>')
+                    .on('click', (e) => {
+                        e.preventDefault();
+                        this.toggleWishlist(asin, $wishlistButton);
+                    });
 
-            // Animation du bouton
-            $button.addClass('button-clicked');
-            setTimeout(() => $button.removeClass('button-clicked'), 500);
-
-            // Pas de preventDefault - laisser le lien s'ouvrir
-        },
-
-        /**
-         * Gestion des clics sur les badges
-         */
-        handleBadgeClick: function(event) {
-            event.preventDefault();
-            const $badge = $(event.target);
-            
-            // Afficher les informations du badge
-            this.showBadgeInfo($badge);
-        },
-
-        /**
-         * Gestion du survol des produits
-         */
-        handleProductHover: function(event) {
-            const $product = $(event.target).closest('.amazon-product-shortcode');
-            
-            // Précharger les données si nécessaire
-            this.preloadProductData($product);
-        },
-
-        /**
-         * Chargement paresseux des images
-         */
-        initLazyLoading: function() {
-            if (!this.config.lazyLoadImages || !('IntersectionObserver' in window)) {
-                return;
+                $product.find('.amazon-product-actions').append($wishlistButton);
             }
+        },
 
-            const imageObserver = new IntersectionObserver((entries, observer) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target;
-                        const src = img.dataset.src;
-                        
-                        if (src) {
-                            img.src = src;
-                            img.removeAttribute('data-src');
-                            img.classList.remove('lazy-load');
-                            observer.unobserve(img);
-                        }
+        /**
+         * Gestion de la wishlist
+         */
+        toggleWishlist: function(asin, $button) {
+            const data = {
+                action: 'amazon_toggle_wishlist',
+                asin: asin,
+                nonce: amazonImporterPublic.nonce
+            };
+
+            $.ajax({
+                url: amazonImporterPublic.ajaxUrl,
+                type: 'POST',
+                data: data,
+                success: (response) => {
+                    if (response.success) {
+                        $button.toggleClass('amazon-in-wishlist', response.data.in_wishlist);
+                        this.showNotification(response.data.message);
                     }
-                });
-            });
-
-            $('.amazon-product-shortcode img[data-src]').each(function() {
-                imageObserver.observe(this);
+                }
             });
         },
 
         /**
-         * Initialisation de l'Intersection Observer
+         * Ajout de tooltips
          */
-        initIntersectionObserver: function() {
-            if (!('IntersectionObserver' in window)) return;
-
-            const productObserver = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const $product = $(entry.target);
-                        this.trackProductView($product);
-                    }
+        addTooltip: function($element, content) {
+            $element.attr('title', content);
+            
+            // Tooltip amélioré si disponible
+            if (typeof tippy !== 'undefined') {
+                tippy($element[0], {
+                    content: content,
+                    theme: 'amazon-importer'
                 });
-            }, {
-                threshold: 0.5
-            });
-
-            this.elements.amazonProducts.each(function() {
-                productObserver.observe(this);
-            });
+            }
         },
 
         /**
          * Amélioration progressive
          */
         initProgressiveEnhancement: function() {
-            // Ajouter des classes pour indiquer que JS est activé
-            this.elements.body.addClass('amazon-js-enabled');
-
-            // Améliorer l'accessibilité
-            this.enhanceAccessibility();
-
-            // Ajouter des raccourcis clavier
-            this.addKeyboardShortcuts();
-        },
-
-        /**
-         * Amélioration de l'accessibilité
-         */
-        enhanceAccessibility: function() {
-            // ARIA labels pour les boutons
-            this.elements.buyButtons.each(function() {
-                const $button = $(this);
-                const productTitle = $button.closest('.amazon-product-shortcode')
-                    .find('.product-title').text();
+            // Améliorer les liens Amazon existants
+            $('a[href*="amazon."]').each(function() {
+                const $link = $(this);
+                const href = $link.attr('href');
                 
-                $button.attr('aria-label', `Acheter ${productTitle} sur Amazon`);
-            });
-
-            // Navigation au clavier
-            this.elements.amazonProducts.attr('tabindex', '0');
-        },
-
-        /**
-         * Ajout de raccourcis clavier
-         */
-        addKeyboardShortcuts: function() {
-            $(document).on('keydown', (event) => {
-                // Échapper pour fermer les modales
-                if (event.key === 'Escape') {
-                    this.closeModals();
+                // Ajouter des attributs pour le tracking
+                if (href.includes('/dp/') || href.includes('/gp/product/')) {
+                    $link.addClass('amazon-external-link');
+                    $link.attr('rel', 'nofollow sponsored');
+                    $link.attr('target', '_blank');
                 }
             });
         },
 
         /**
-         * Tracking des événements
+         * Optimisation des images
          */
-        trackEvent: function(eventName, data = {}) {
-            if (!this.config.trackingEnabled) return;
+        optimizeImages: function() {
+            $('.amazon-product-image img').each(function() {
+                const img = this;
+                
+                // Ajouter des attributs pour l'optimisation
+                if (!img.hasAttribute('loading')) {
+                    img.setAttribute('loading', 'lazy');
+                }
+                
+                if (!img.hasAttribute('decoding')) {
+                    img.setAttribute('decoding', 'async');
+                }
+            });
+        },
 
-            // Google Analytics
-            if (typeof gtag !== 'undefined') {
-                gtag('event', eventName, {
-                    event_category: 'Amazon Product Importer',
-                    ...data
-                });
-            }
-
-            // Analytics personnalisées
-            if (amazonImporterPublic.analytics) {
-                $.ajax({
-                    url: amazonImporterPublic.ajaxUrl,
-                    type: 'POST',
-                    data: {
-                        action: 'amazon_track_event',
-                        event: eventName,
-                        data: data,
-                        nonce: amazonImporterPublic.nonce
+        /**
+         * Intersection Observer pour les animations
+         */
+        initIntersectionObserver: function() {
+            const animationObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('amazon-animate-in');
                     }
                 });
-            }
-        },
+            }, { threshold: 0.1 });
 
-        /**
-         * Tracking des vues de produit
-         */
-        trackProductView: function($product) {
-            const asin = $product.data('amazon-asin');
-            if (asin && !$product.data('view-tracked')) {
-                $product.data('view-tracked', true);
-                this.trackEvent('product_view', { asin: asin });
-            }
-        },
-
-        /**
-         * Gestion du cache
-         */
-        setCache: function(key, data, ttl = this.config.cacheTimeout) {
-            this.cache.set(key, {
-                data: data,
-                timestamp: Date.now(),
-                ttl: ttl
+            document.querySelectorAll('.amazon-product-shortcode').forEach(el => {
+                animationObserver.observe(el);
             });
         },
 
-        getCache: function(key) {
-            const cached = this.cache.get(key);
-            if (cached && (Date.now() - cached.timestamp) < cached.ttl) {
-                return cached.data;
-            }
-            this.cache.delete(key);
-            return null;
+        /**
+         * Préchargement des ressources critiques
+         */
+        preloadCriticalAssets: function() {
+            const asins = [];
+            
+            $('.amazon-product-shortcode').each(function() {
+                const asin = $(this).data('amazon-asin');
+                if (asin && asins.indexOf(asin) === -1) {
+                    asins.push(asin);
+                }
+            });
+
+            // Précharger les 3 premiers produits
+            asins.slice(0, 3).forEach(asin => {
+                this.preloadProductData(asin);
+            });
         },
 
         /**
-         * Fonction de debounce
+         * Ajustements responsifs
          */
-        debounce: function(func, wait) {
+        adjustResponsiveElements: function() {
+            const isMobile = window.innerWidth < 768;
+            
+            $('.amazon-product-shortcode').each(function() {
+                const $product = $(this);
+                $product.toggleClass('amazon-mobile-layout', isMobile);
+            });
+        },
+
+        /**
+         * Recalcul des layouts
+         */
+        recalculateLayouts: function() {
+            // Recalculer les hauteurs des grilles de produits
+            $('.amazon-products-grid').each(function() {
+                const $grid = $(this);
+                const items = $grid.find('.amazon-product-shortcode');
+                
+                // Reset heights
+                items.css('height', 'auto');
+                
+                // Égaliser les hauteurs si nécessaire
+                if (items.length > 1) {
+                    const maxHeight = Math.max(...items.map(function() {
+                        return $(this).outerHeight();
+                    }).get());
+                    
+                    items.css('height', maxHeight + 'px');
+                }
+            });
+        },
+
+        /**
+         * Configuration des analytics
+         */
+        setupAnalytics: function() {
+            if (!amazonImporterPublic.analytics) return;
+
+            // Initialiser le tracking des interactions
+            this.trackUserInteractions();
+        },
+
+        /**
+         * Tracking des interactions utilisateur
+         */
+        trackUserInteractions: function() {
+            // Track scroll depth sur les produits
+            const productElements = document.querySelectorAll('.amazon-product-shortcode');
+            const scrollObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const asin = entry.target.getAttribute('data-amazon-asin');
+                        this.trackEvent('product_viewed', { asin: asin });
+                        scrollObserver.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.5 });
+
+            productElements.forEach(el => scrollObserver.observe(el));
+        },
+
+        /**
+         * Tracking d'événements
+         */
+        trackEvent: function(eventName, properties = {}) {
+            if (!amazonImporterPublic.analytics) return;
+
+            const eventData = {
+                action: 'amazon_track_event',
+                event_name: eventName,
+                properties: properties,
+                nonce: amazonImporterPublic.nonce
+            };
+
+            // Envoi en mode "fire and forget"
+            navigator.sendBeacon(amazonImporterPublic.ajaxUrl, new URLSearchParams(eventData));
+        },
+
+        /**
+         * Affichage de notifications
+         */
+        showNotification: function(message, type = 'info', duration = 3000) {
+            const $notification = $('<div class="amazon-notification">')
+                .addClass(`amazon-notification-${type}`)
+                .text(message)
+                .appendTo('body');
+
+            $notification.fadeIn(300);
+
+            setTimeout(() => {
+                $notification.fadeOut(300, function() {
+                    $(this).remove();
+                });
+            }, duration);
+        },
+
+        /**
+         * Fonction utilitaire de debounce
+         */
+        debounce: function(func, wait, immediate) {
             let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
+            return function executedFunction() {
+                const context = this;
+                const args = arguments;
+                const later = function() {
+                    timeout = null;
+                    if (!immediate) func.apply(context, args);
                 };
+                const callNow = immediate && !timeout;
                 clearTimeout(timeout);
                 timeout = setTimeout(later, wait);
+                if (callNow) func.apply(context, args);
             };
-        },
-
-        /**
-         * Fonction de throttle
-         */
-        throttle: function(func, limit) {
-            let inThrottle;
-            return function() {
-                const args = arguments;
-                const context = this;
-                if (!inThrottle) {
-                    func.apply(context, args);
-                    inThrottle = true;
-                    setTimeout(() => inThrottle = false, limit);
-                }
-            };
-        },
-
-        /**
-         * Utilitaires diverses
-         */
-        showError: function($element, message) {
-            const $error = $('<div class="amazon-notice notice-error"></div>').text(message);
-            $element.prepend($error);
-            setTimeout(() => $error.fadeOut(), 5000);
-        },
-
-        showSuccess: function($element, message) {
-            const $success = $('<div class="amazon-notice notice-success"></div>').text(message);
-            $element.prepend($success);
-            setTimeout(() => $success.fadeOut(), 3000);
-        },
-
-        addTooltip: function($element, content) {
-            $element.attr('title', content);
-            // Ici, vous pourriez intégrer une bibliothèque de tooltips plus avancée
-        },
-
-        /**
-         * Nettoyage lors de la destruction
-         */
-        destroy: function() {
-            $(document).off('.amazon-product-importer');
-            $(window).off('.amazon-product-importer');
-            this.cache.clear();
         }
     };
 
-    // Exposition de l'API globalement
+    // Exposition de l'API publique
     window.AmazonProductImporter.Public = API;
 
     // Initialisation automatique
-    $(document).ready(() => {
+    $(document).ready(function() {
         API.init();
     });
 
 })(jQuery);
-
-/**
- * Compatibilité sans jQuery (optionnel)
- */
-if (typeof jQuery === 'undefined') {
-    console.warn('Amazon Product Importer: jQuery n\'est pas chargé. Certaines fonctionnalités peuvent ne pas fonctionner.');
-}

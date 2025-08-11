@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: Amazon Product Importer
- * Plugin URI: https://example.com/amazon-product-importer
+ * Plugin URI: https://mycreanet.fr/amazon-product-importer
  * Description: Importez facilement des produits Amazon dans votre boutique WooCommerce
  * Version: 1.0.0
  * Author: Votre Nom
- * Author URI: https://example.com
+ * Author URI: https://mycreanet.fr
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: amazon-product-importer
