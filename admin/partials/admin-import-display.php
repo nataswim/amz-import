@@ -1,6 +1,12 @@
 <?php
 /**
- * Provide a admin area view for the plugin
+ * Admin Import Display Template
+ *
+ * @link       https://yourwebsite.com
+ * @since      1.0.0
+ *
+ * @package    Amazon_Product_Importer
+ * @subpackage Amazon_Product_Importer/admin/partials
  */
 
 // If this file is called directly, abort.
@@ -8,183 +14,389 @@ if (!defined('WPINC')) {
     die;
 }
 
-$api_configured = get_option('amazon_importer_api_access_key_id') && 
-                  get_option('amazon_importer_api_secret_access_key') && 
-                  get_option('amazon_importer_api_associate_tag');
+// Check user capabilities
+if (!current_user_can('manage_woocommerce')) {
+    wp_die(__('You do not have sufficient permissions to access this page.'));
+}
+
+// Get current settings for search filters
+$api_configured = get_option('amazon_product_importer_access_key_id') && 
+                  get_option('amazon_product_importer_secret_access_key') && 
+                  get_option('amazon_product_importer_associate_tag');
+
+$marketplace = get_option('amazon_product_importer_marketplace', 'www.amazon.com');
+$region = get_option('amazon_product_importer_region', 'us-east-1');
+
+// Get import history
+global $wpdb;
+$recent_imports = $wpdb->get_results(
+    "SELECT * FROM {$wpdb->prefix}amazon_import_log 
+     WHERE action_type = 'import' 
+     ORDER BY created_at DESC 
+     LIMIT 10"
+);
 ?>
 
 <div class="wrap amazon-importer-wrap">
+    <!-- Header Section -->
     <div class="amazon-importer-header">
-        <img src="<?php echo AMAZON_PRODUCT_IMPORTER_PLUGIN_URL; ?>assets/images/amazon-logo.png" 
-             alt="Amazon" class="amazon-logo">
-        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        <div class="header-content">
+            <div class="header-title">
+                <img src="<?php echo AMAZON_PRODUCT_IMPORTER_PLUGIN_URL; ?>assets/images/amazon-logo.png" 
+                     alt="Amazon" class="amazon-logo">
+                <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+            </div>
+            <div class="header-actions">
+                <button type="button" id="bulk-import-btn" class="button button-secondary">
+                    <span class="dashicons dashicons-upload"></span>
+                    <?php _e('Import en masse', 'amazon-product-importer'); ?>
+                </button>
+                <button type="button" id="import-history-btn" class="button button-secondary">
+                    <span class="dashicons dashicons-backup"></span>
+                    <?php _e('Historique', 'amazon-product-importer'); ?>
+                </button>
+            </div>
+        </div>
     </div>
 
     <?php if (!$api_configured): ?>
-        <div class="notice notice-warning">
-            <p>
-                <?php _e('Veuillez configurer vos clés API Amazon dans les ', 'amazon-product-importer'); ?>
-                <a href="<?php echo admin_url('admin.php?page=amazon-importer-settings'); ?>">paramètres</a>
-                <?php _e(' avant d\'importer des produits.', 'amazon-product-importer'); ?>
-            </p>
-        </div>
+    <!-- Configuration Warning -->
+    <div class="notice notice-warning">
+        <p>
+            <strong><?php _e('Configuration requise', 'amazon-product-importer'); ?></strong>
+            <?php _e('Veuillez configurer vos clés API Amazon dans les ', 'amazon-product-importer'); ?>
+            <a href="<?php echo admin_url('admin.php?page=amazon-product-importer-settings'); ?>">
+                <?php _e('paramètres', 'amazon-product-importer'); ?>
+            </a>
+            <?php _e(' avant d\'importer des produits.', 'amazon-product-importer'); ?>
+        </p>
+    </div>
     <?php endif; ?>
 
-    <div id="amazon-messages"></div>
-
-    <div class="amazon-importer-content">
+    <!-- Main Import Interface -->
+    <div class="amazon-import-interface <?php echo !$api_configured ? 'disabled' : ''; ?>">
         
-        <!-- Search Form -->
-        <div class="amazon-search-form">
-            <h3><?php _e('Rechercher des produits Amazon', 'amazon-product-importer'); ?></h3>
+        <!-- Search Section -->
+        <div class="import-search-section">
+            <div class="section-header">
+                <h2><?php _e('Rechercher des Produits Amazon', 'amazon-product-importer'); ?></h2>
+                <p class="section-description">
+                    <?php _e('Recherchez des produits Amazon par mots-clés ou ASIN pour les importer dans votre boutique.', 'amazon-product-importer'); ?>
+                </p>
+            </div>
             
-            <form id="amazon-search-form">
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">
-                            <label><?php _e('Type de recherche', 'amazon-product-importer'); ?></label>
-                        </th>
-                        <td>
-                            <label>
-                                <input type="radio" name="search_type" value="keywords" checked>
-                                <?php _e('Par mots-clés', 'amazon-product-importer'); ?>
-                            </label>
-                            <label style="margin-left: 20px;">
-                                <input type="radio" name="search_type" value="asin">
-                                <?php _e('Par ASIN', 'amazon-product-importer'); ?>
-                            </label>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">
-                            <label for="search-keywords"><?php _e('Mots-clés / ASIN', 'amazon-product-importer'); ?></label>
-                        </th>
-                        <td>
-                            <input type="text" 
-                                   id="search-keywords" 
-                                   name="keywords" 
-                                   placeholder="iPhone, Samsung Galaxy, ..."
-                                   class="regular-text"
-                                   <?php echo !$api_configured ? 'disabled' : ''; ?>>
-                            <p class="description">
-                                <?php _e('Entrez des mots-clés pour rechercher ou des ASIN séparés par des virgules', 'amazon-product-importer'); ?>
-                            </p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">
-                            <label for="search-category"><?php _e('Catégorie', 'amazon-product-importer'); ?></label>
-                        </th>
-                        <td>
-                            <select id="search-category" name="category" <?php echo !$api_configured ? 'disabled' : ''; ?>>
-                                <option value=""><?php _e('Toutes les catégories', 'amazon-product-importer'); ?></option>
+            <div class="search-controls-container">
+                <!-- Search Type Selector -->
+                <div class="search-type-selector">
+                    <div class="radio-group">
+                        <label class="radio-label active">
+                            <input type="radio" name="search_type" value="keywords" checked>
+                            <span class="radio-custom"></span>
+                            <span class="radio-text"><?php _e('Recherche par mots-clés', 'amazon-product-importer'); ?></span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="search_type" value="asin">
+                            <span class="radio-custom"></span>
+                            <span class="radio-text"><?php _e('Recherche par ASIN', 'amazon-product-importer'); ?></span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="search_type" value="bulk_asin">
+                            <span class="radio-custom"></span>
+                            <span class="radio-text"><?php _e('Plusieurs ASIN', 'amazon-product-importer'); ?></span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Search Input Group -->
+                <div class="search-input-group">
+                    <div class="input-container">
+                        <input type="text" 
+                               id="amazon-search-query" 
+                               class="search-input"
+                               placeholder="<?php _e('Entrez vos mots-clés...', 'amazon-product-importer'); ?>"
+                               <?php echo !$api_configured ? 'disabled' : ''; ?>>
+                        <textarea id="amazon-bulk-asin" 
+                                  class="search-textarea" 
+                                  placeholder="<?php _e('Entrez les ASIN séparés par des virgules ou des retours à la ligne...', 'amazon-product-importer'); ?>"
+                                  style="display: none;"
+                                  <?php echo !$api_configured ? 'disabled' : ''; ?>></textarea>
+                    </div>
+                    <button type="button" 
+                            id="amazon-search-btn" 
+                            class="button button-primary search-button"
+                            <?php echo !$api_configured ? 'disabled' : ''; ?>>
+                        <span class="dashicons dashicons-search"></span>
+                        <span class="button-text"><?php _e('Rechercher', 'amazon-product-importer'); ?></span>
+                        <span class="loading-spinner"></span>
+                    </button>
+                </div>
+                
+                <!-- Advanced Search Filters -->
+                <div class="search-filters" id="search-filters">
+                    <div class="filters-row">
+                        <div class="filter-group">
+                            <label for="amazon-category-filter"><?php _e('Catégorie', 'amazon-product-importer'); ?></label>
+                            <select id="amazon-category-filter" class="filter-select" <?php echo !$api_configured ? 'disabled' : ''; ?>>
+                                <option value=""><?php _e('Toutes catégories', 'amazon-product-importer'); ?></option>
+                                <option value="All"><?php _e('Tous les départements', 'amazon-product-importer'); ?></option>
                                 <option value="Electronics"><?php _e('Électronique', 'amazon-product-importer'); ?></option>
                                 <option value="Clothing"><?php _e('Vêtements', 'amazon-product-importer'); ?></option>
                                 <option value="Books"><?php _e('Livres', 'amazon-product-importer'); ?></option>
-                                <option value="Home"><?php _e('Maison & Jardin', 'amazon-product-importer'); ?></option>
                                 <option value="Sports"><?php _e('Sports', 'amazon-product-importer'); ?></option>
-                                <option value="Toys"><?php _e('Jouets', 'amazon-product-importer'); ?></option>
+                                <option value="Home"><?php _e('Maison', 'amazon-product-importer'); ?></option>
                                 <option value="Beauty"><?php _e('Beauté', 'amazon-product-importer'); ?></option>
-                                <option value="Automotive"><?php _e('Auto & Moto', 'amazon-product-importer'); ?></option>
+                                <option value="Automotive"><?php _e('Automobile', 'amazon-product-importer'); ?></option>
                             </select>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th></th>
-                        <td>
-                            <button type="submit" 
-                                    id="search-button" 
-                                    class="button search-button"
-                                    <?php echo !$api_configured ? 'disabled' : ''; ?>>
-                                <span class="dashicons dashicons-search"></span>
-                                <?php _e('Rechercher', 'amazon-product-importer'); ?>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="amazon-sort-by"><?php _e('Trier par', 'amazon-product-importer'); ?></label>
+                            <select id="amazon-sort-by" class="filter-select" <?php echo !$api_configured ? 'disabled' : ''; ?>>
+                                <option value="Relevance"><?php _e('Pertinence', 'amazon-product-importer'); ?></option>
+                                <option value="Price:LowToHigh"><?php _e('Prix croissant', 'amazon-product-importer'); ?></option>
+                                <option value="Price:HighToLow"><?php _e('Prix décroissant', 'amazon-product-importer'); ?></option>
+                                <option value="NewestArrivals"><?php _e('Nouveautés', 'amazon-product-importer'); ?></option>
+                                <option value="AvgCustomerReviews"><?php _e('Meilleures évaluations', 'amazon-product-importer'); ?></option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="amazon-item-count"><?php _e('Résultats par page', 'amazon-product-importer'); ?></label>
+                            <select id="amazon-item-count" class="filter-select" <?php echo !$api_configured ? 'disabled' : ''; ?>>
+                                <option value="10">10</option>
+                                <option value="20" selected>20</option>
+                                <option value="30">30</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <button type="button" id="advanced-filters-toggle" class="button button-link">
+                                <span class="dashicons dashicons-admin-generic"></span>
+                                <?php _e('Filtres avancés', 'amazon-product-importer'); ?>
                             </button>
-                            
-                            <button type="button" 
-                                    id="clear-results" 
-                                    class="button"
-                                    style="margin-left: 10px;">
-                                <?php _e('Effacer', 'amazon-product-importer'); ?>
-                            </button>
-                        </td>
-                    </tr>
-                </table>
-            </form>
-        </div>
-
-        <!-- Loading Animation -->
-        <div id="amazon-loading" class="amazon-loading">
-            <span class="spinner is-active"></span>
-            <p><?php _e('Recherche en cours...', 'amazon-product-importer'); ?></p>
-        </div>
-
-        <!-- Search Statistics -->
-        <div id="search-stats" style="display: none; margin: 15px 0; font-weight: bold;"></div>
-
-        <!-- Bulk Import Controls -->
-        <div id="bulk-import-controls" style="display: none; margin: 15px 0;">
-            <label>
-                <input type="checkbox" id="select-all-products">
-                <?php _e('Tout sélectionner', 'amazon-product-importer'); ?>
-            </label>
-            
-            <button type="button" 
-                    id="bulk-import-selected" 
-                    class="button button-primary" 
-                    disabled
-                    style="margin-left: 15px;">
-                <?php _e('Importer la sélection', 'amazon-product-importer'); ?>
-            </button>
-        </div>
-
-        <!-- Bulk Import Progress -->
-        <div id="bulk-progress-wrap" class="amazon-progress-wrap" style="display: none;">
-            <div id="bulk-progress-bar" class="amazon-progress-bar">
-                <div class="amazon-progress-fill"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced Filters (Hidden by default) -->
+                    <div class="advanced-filters" id="advanced-filters" style="display: none;">
+                        <div class="filters-row">
+                            <div class="filter-group">
+                                <label for="min-price"><?php _e('Prix minimum', 'amazon-product-importer'); ?></label>
+                                <input type="number" id="min-price" class="filter-input" min="0" step="0.01">
+                            </div>
+                            <div class="filter-group">
+                                <label for="max-price"><?php _e('Prix maximum', 'amazon-product-importer'); ?></label>
+                                <input type="number" id="max-price" class="filter-input" min="0" step="0.01">
+                            </div>
+                            <div class="filter-group">
+                                <label for="brand-filter"><?php _e('Marque', 'amazon-product-importer'); ?></label>
+                                <input type="text" id="brand-filter" class="filter-input" placeholder="<?php _e('Nom de la marque...', 'amazon-product-importer'); ?>">
+                            </div>
+                            <div class="filter-group">
+                                <label for="condition-filter"><?php _e('État', 'amazon-product-importer'); ?></label>
+                                <select id="condition-filter" class="filter-select">
+                                    <option value=""><?php _e('Tous les états', 'amazon-product-importer'); ?></option>
+                                    <option value="New"><?php _e('Neuf', 'amazon-product-importer'); ?></option>
+                                    <option value="Used"><?php _e('Occasion', 'amazon-product-importer'); ?></option>
+                                    <option value="Refurbished"><?php _e('Reconditionné', 'amazon-product-importer'); ?></option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="bulk-progress-text" class="amazon-progress-text"></div>
         </div>
-
+        
+        <!-- Search Status -->
+        <div class="search-status" id="search-status" style="display: none;">
+            <div class="status-content">
+                <span class="status-text"></span>
+                <span class="status-count"></span>
+            </div>
+        </div>
+        
         <!-- Search Results -->
-        <div id="amazon-results" class="amazon-results">
-            <div class="amazon-results-header">
-                <h3><?php _e('Résultats de la recherche', 'amazon-product-importer'); ?></h3>
+        <div class="search-results-section">
+            <div class="results-header" id="results-header" style="display: none;">
+                <div class="results-info">
+                    <h3><?php _e('Résultats de recherche', 'amazon-product-importer'); ?></h3>
+                    <span class="results-count" id="results-count"></span>
+                </div>
+                <div class="results-actions">
+                    <div class="view-toggle">
+                        <button type="button" class="view-btn active" data-view="grid">
+                            <span class="dashicons dashicons-grid-view"></span>
+                        </button>
+                        <button type="button" class="view-btn" data-view="list">
+                            <span class="dashicons dashicons-list-view"></span>
+                        </button>
+                    </div>
+                    <div class="bulk-actions">
+                        <button type="button" id="select-all-btn" class="button button-secondary">
+                            <?php _e('Tout sélectionner', 'amazon-product-importer'); ?>
+                        </button>
+                        <button type="button" id="import-selected-btn" class="button button-primary" disabled>
+                            <?php _e('Importer sélectionnés', 'amazon-product-importer'); ?>
+                        </button>
+                    </div>
+                </div>
             </div>
             
-            <div id="amazon-products-grid" class="amazon-products-grid">
-                <!-- Products will be loaded here via AJAX -->
+            <!-- Results Container -->
+            <div id="amazon-search-results" class="search-results-grid">
+                <!-- Results will be populated via AJAX -->
+            </div>
+            
+            <!-- Pagination -->
+            <div class="results-pagination" id="results-pagination" style="display: none;">
+                <button type="button" id="load-more-btn" class="button button-large">
+                    <?php _e('Charger plus de résultats', 'amazon-product-importer'); ?>
+                </button>
             </div>
         </div>
-
     </div>
-
-    <!-- Import Statistics (if available) -->
-    <?php
-    $import_stats = get_option('amazon_importer_stats', array());
-    if (!empty($import_stats)):
-    ?>
-        <div class="amazon-import-stats" style="margin-top: 30px; background: #fff; padding: 20px; border: 1px solid #ccd0d4;">
-            <h3><?php _e('Statistiques d\'importation', 'amazon-product-importer'); ?></h3>
-            <p>
-                <?php _e('Produits importés aujourd\'hui:', 'amazon-product-importer'); ?> 
-                <strong id="import-counter"><?php echo isset($import_stats['today']) ? $import_stats['today'] : 0; ?></strong>
-            </p>
-            <p>
-                <?php _e('Total des produits importés:', 'amazon-product-importer'); ?> 
-                <strong><?php echo isset($import_stats['total']) ? $import_stats['total'] : 0; ?></strong>
-            </p>
+    
+    <!-- Import Progress Modal -->
+    <div id="import-progress-modal" class="amazon-modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><?php _e('Import en cours...', 'amazon-product-importer'); ?></h3>
+                <button type="button" class="modal-close" aria-label="<?php _e('Fermer', 'amazon-product-importer'); ?>">
+                    <span class="dashicons dashicons-no"></span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span class="progress-text" id="progress-text">0%</span>
+                        <span class="progress-details" id="progress-details"></span>
+                    </div>
+                </div>
+                <div class="import-log" id="import-log">
+                    <!-- Import progress messages will appear here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancel-import-btn" class="button button-secondary">
+                    <?php _e('Annuler', 'amazon-product-importer'); ?>
+                </button>
+                <button type="button" id="close-modal-btn" class="button button-primary" style="display: none;">
+                    <?php _e('Fermer', 'amazon-product-importer'); ?>
+                </button>
+            </div>
         </div>
-    <?php endif; ?>
-
-    <!-- Help Section -->
-    <div class="amazon-help-section" style="margin-top: 30px; background: #f9f9f9; padding: 20px; border-left: 4px solid #0073aa;">
-        <h3><?php _e('Guide d\'utilisation', 'amazon-product-importer'); ?></h3>
-        <ul>
-            <li><?php _e('Recherchez des produits par mots-clés ou entrez directement des codes ASIN', 'amazon-product-importer'); ?></li>
-            <li><?php _e('Utilisez les catégories pour affiner vos résultats de recherche', 'amazon-product-importer'); ?></li>
-            <li><?php _e('Cliquez sur "Importer" pour ajouter un produit à votre boutique', 'amazon-product-importer'); ?></li>
-            <li><?php _e('Utilisez l\'importation en lot pour importer plusieurs produits à la fois', 'amazon-product-importer'); ?></li>
-            <li><?php _e('Les produits importés seront automatiquement créés en tant que produits WooCommerce', 'amazon-product-importer'); ?></li>
-        </ul>
+    </div>
+    
+    <!-- Bulk Import Modal -->
+    <div id="bulk-import-modal" class="amazon-modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><?php _e('Import en masse', 'amazon-product-importer'); ?></h3>
+                <button type="button" class="modal-close">
+                    <span class="dashicons dashicons-no"></span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="bulk-import-options">
+                    <div class="import-option">
+                        <h4><?php _e('Import depuis un fichier CSV', 'amazon-product-importer'); ?></h4>
+                        <p><?php _e('Importez plusieurs produits depuis un fichier CSV contenant les ASIN.', 'amazon-product-importer'); ?></p>
+                        <div class="file-upload-area">
+                            <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                            <button type="button" id="csv-upload-btn" class="button button-secondary">
+                                <span class="dashicons dashicons-upload"></span>
+                                <?php _e('Choisir un fichier CSV', 'amazon-product-importer'); ?>
+                            </button>
+                            <span class="file-name" id="csv-file-name"></span>
+                        </div>
+                        <a href="<?php echo AMAZON_PRODUCT_IMPORTER_PLUGIN_URL; ?>assets/sample-import.csv" class="download-sample">
+                            <?php _e('Télécharger un exemple de fichier CSV', 'amazon-product-importer'); ?>
+                        </a>
+                    </div>
+                    
+                    <div class="import-option">
+                        <h4><?php _e('Import depuis une liste de souhaits Amazon', 'amazon-product-importer'); ?></h4>
+                        <p><?php _e('Importez tous les produits depuis une liste de souhaits Amazon publique.', 'amazon-product-importer'); ?></p>
+                        <div class="wishlist-input-area">
+                            <input type="url" 
+                                   id="wishlist-url-input" 
+                                   class="regular-text"
+                                   placeholder="https://www.amazon.com/hz/wishlist/ls/XXXXXXXXXX">
+                            <button type="button" id="wishlist-import-btn" class="button button-secondary">
+                                <?php _e('Importer la liste', 'amazon-product-importer'); ?>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Import History Modal -->
+    <div id="import-history-modal" class="amazon-modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3><?php _e('Historique des imports', 'amazon-product-importer'); ?></h3>
+                <button type="button" class="modal-close">
+                    <span class="dashicons dashicons-no"></span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="history-filters">
+                    <select id="history-filter-status">
+                        <option value=""><?php _e('Tous les statuts', 'amazon-product-importer'); ?></option>
+                        <option value="success"><?php _e('Réussis', 'amazon-product-importer'); ?></option>
+                        <option value="error"><?php _e('Échoués', 'amazon-product-importer'); ?></option>
+                    </select>
+                    <input type="date" id="history-filter-date">
+                    <button type="button" id="refresh-history-btn" class="button button-secondary">
+                        <?php _e('Actualiser', 'amazon-product-importer'); ?>
+                    </button>
+                </div>
+                <div class="history-table-container">
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
+                            <tr>
+                                <th><?php _e('ASIN', 'amazon-product-importer'); ?></th>
+                                <th><?php _e('Produit', 'amazon-product-importer'); ?></th>
+                                <th><?php _e('Statut', 'amazon-product-importer'); ?></th>
+                                <th><?php _e('Date', 'amazon-product-importer'); ?></th>
+                                <th><?php _e('Actions', 'amazon-product-importer'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody id="import-history-table">
+                            <!-- History entries will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- JavaScript Data -->
+<script type="text/javascript">
+var amazon_importer_ajax = {
+    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+    nonce: '<?php echo wp_create_nonce('amazon_importer_nonce'); ?>',
+    marketplace: '<?php echo esc_js($marketplace); ?>',
+    region: '<?php echo esc_js($region); ?>',
+    api_configured: <?php echo $api_configured ? 'true' : 'false'; ?>,
+    strings: {
+        searching: '<?php _e('Recherche en cours...', 'amazon-product-importer'); ?>',
+        importing: '<?php _e('Import en cours...', 'amazon-product-importer'); ?>',
+        import_success: '<?php _e('Produit importé avec succès', 'amazon-product-importer'); ?>',
+        import_error: '<?php _e('Erreur lors de l\'import', 'amazon-product-importer'); ?>',
+        no_results: '<?php _e('Aucun résultat trouvé', 'amazon-product-importer'); ?>',
+        select_products: '<?php _e('Veuillez sélectionner des produits à importer', 'amazon-product-importer'); ?>',
+        confirm_cancel: '<?php _e('Êtes-vous sûr de vouloir annuler l\'import ?', 'amazon-product-importer'); ?>'
+    }
+};
+</script>
